@@ -1,0 +1,62 @@
+--- token_filter.module.org	2009-06-13 21:08:00.000000000 +0200
++++ token_filter.module	2010-03-02 11:24:55.000000000 +0100
+@@ -7,12 +7,27 @@
+  */
+ 
+ /**
++ * Implementation of hook_nodeapi
++ *
++ * We need the node in the replace function so we store in an ugly global it when it's loaded for later use.
++ *
++ * Method found at: http://drupal.org/node/259819
++ */
++function token_filter_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL)
++{
++  global $_customfilter_code_vars;
++
++  if ($op == 'load') {
++    $_customfilter_code_vars->node = $node;
++  }
++}
++
++/**
+  * Implementation of hook_filter.
+  * 
+  * Adds the Token filter to the input format options.
+  */
+ function token_filter_filter($op, $delta = 0, $format = -1, $text = '' ) {
+-
+   switch ($op) {
+     case 'list':
+       return array(0 => t('Token filter'));
+@@ -45,22 +60,27 @@ function token_filter_filter($op, $delta
+  */
+ function token_filter_replacetoken($matches) {  
+   global $user;
++  
+   $type  = $matches[1];
+   $token = $matches[2];
+   switch ($type) {
+     case 'user' :
+       $object = $user;
+       break;
++    case 'node':
++      global $_customfilter_code_vars;
++      $type = 'node';
++      $object = $_customfilter_code_vars->node;
++      break;
+     case 'global':
+     default:
+       $object = NULL;
+       break;
+-  } 
+-  
++  }
++
+   // add [ ] to the token so str_replace correctly replaces token values
+   // if not, a token like 'custom_text' won't be properly replaced if another token like 'custom' exists  
+   $token = '['.$token.']';
+-    
+   $output = token_replace($token, $type, $object, '[', ']');  
+   return $output;
+ }

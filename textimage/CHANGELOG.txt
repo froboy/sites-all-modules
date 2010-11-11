@@ -1,0 +1,32 @@
+// $Id: CHANGELOG.txt,v 1.1.2.3 2009/05/20 00:02:29 deciphered Exp $
+
+Textimage 6.x-2.x-dev, xxxx-xx-xx (development release)
+-----------------------------
+
+- #465638: Improved unicode support.
+- #459046: Fixed upgrade path.
+- #422772: Changed formatter to no longer show alt/title for Email module.
+- #403212: Removed legacy code.
+- #388818: Fixed error when generating textimage.
+- #221539: Added consistent heights.
+- #71265: Fixed character cutoff.
+- Added Textimage preset settings preview.
+- Added additional text fields in preview settings.
+- Added support for non clean-urls.
+- Added requirements to .install.
+- Added ability to output file path using theme_textimage_image().
+- Added font color opacity.
+- Added Improved UI using Vertical Tabs.
+- Changed location of Textimage to admin/build/textimage.
+- Updated CCK formatter support.
+- Updated transparency support.
+- Fixed issue with presets being flushed unnecessarily.
+- Fixed Text Outlines with Margins or Background.
+- Fixed undefined variable error.
+
+
+Textimage 6.x-2.1, 2009-02-21
+-----------------------------
+
+- Initial 6.x release
+

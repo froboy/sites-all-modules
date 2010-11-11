@@ -1,0 +1,95 @@
+<?php
+
+/**
+ * Implementation of hook_signup_data_alter
+ */
+function signup_guests_signup_data_alter(&$signup, &$form) {
+  $signup->count_towards_limit = 1 + $form['signup_guests'];
+}
+
+/**
+ * Implementation of hook_form_alter
+ */
+function signup_guests_form_alter(&$form, $form_state, $form_id) {
+
+  // Add field so node author can set a maximum number of guests each user is allowed to signup
+  if (strpos($form_id, 'node_form') !== FALSE && isset($form['signup'])) {
+    $options = array(0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20);
+    $form['signup']['signup_guests'] = array(
+      '#type' => 'select',
+      '#title' => 'Maximum number of guests users are allowed to signup?',
+      '#default_value' => 3,
+      '#options' => $options,
+    );
+  }
+
+  // Add guest select box to signup form
+  elseif ($form_id == 'signup_form' || $form_id == 'signup_edit_form') {
+    $nid = $form_id == 'signup_form' ? $form['nid']['#value'] : $form['#signup']->nid;
+
+    if ($max_guests = db_result(db_query("SELECT guests FROM {signup_guests} WHERE nid = %d", $nid))) {
+      $default_guests = $form['#signup']->count_towards_limit ? $form['#signup']->count_towards_limit - 1 : 0;
+      $limit = $form['#parameters'][2]->signup_close_signup_limit;
+      $total = $form['#parameters'][2]->signup_effective_total;
+      $remaining_slots = ($limit - $total - 1)>0 ? $limit-$total-1 : 0 ;
+      $max_guests = $max_guests > $remaining_slots ? $remaining_slots : $max_guests;
+
+      $parent = $form_id == 'signup_form' ? 'collapse' : 'elements'; 
+      //print $max_guests . $default_guests . $nid; 
+      $form[$parent]['signup_guests'] = array(
+        '#type' => 'select',
+        '#title' => 'How many guests will you bring',
+        '#options' => range(0, $max_guests),
+        '#default_value' => $default_guests > $max_guests ? $max_guests : $default_guests,
+        '#weight' => -1,
+      );
+    }
+  }
+}
+
+/**
+ * Implementation of hook_nodeapi
+ */
+function signup_guests_nodeapi(&$node, $op, $teaser = NULL, $page = NULL) {
+  switch ($op) {
+    case 'load':
+
+      if ($node->signup) {
+        $node->signup_guests = db_result(db_query("SELECT guests FROM {signup_guests} WHERE nid = %d", $node->nid));
+      }
+      break;
+    case 'insert':
+      if ($node->signup_enabled) {
+        db_query("INSERT INTO {signup_guests} (nid, guests) VALUES (%d, %d)", $node->nid, $node->signup_guests);
+      }
+      break;
+    case 'update':
+      if ($node->signup_enabled) {
+        // Record exists, update it
+        if (db_result(db_query("SELECT 1 FROM {signup_guests} WHERE nid = %d", $node->nid))) {
+          db_query("UPDATE {signup_guests} SET guests = %d WHERE nid = %d", $node->signup_guests, $node->nid);
+        }
+        // No record, create it
+        else {
+          db_query("INSERT INTO {signup_guests} (nid, guests) VALUES (%d, %d)", $node->nid, $node->signup_guests);
+        }
+      }
+      else {
+        db_query("DELETE FROM {signup_guests} WHERE nid = %d", $node->nid);
+      }
+      break;
+    case 'delete':
+      db_query("DELETE FROM {signup_guests} WHERE nid = %d", $node->nid);
+      break;
+  }
+}
+
+/**
+ * Implementation of hook_views_api().
+ */
+function signup_guests_views_api() {
+  return array(
+    'api' => 2.0,
+    'path' => drupal_get_path('module', 'signup_guests') .'/views',
+  );
+}

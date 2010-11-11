@@ -1,0 +1,24 @@
+<?php /* Developed by PeterMoulding.com 2008. Free for use with Drupal under the GPL. */
+function pet_menu_default_init()
+	{
+	drupal_add_js('// Added by pet_menu_default.
+$(document).ready(function()
+	{
+	$(\'#edit-menu-link-title\').focus(function()
+		{
+		if(this.value == \'\')
+			{
+			this.value = $(\'#edit-title\').val();
+			}
+		});
+	$(\'#edit-path\').focus(function()
+		{
+		if(this.value == \'\')
+			{
+			this.value = $(\'#edit-title\').val().toLowerCase().replace(\' \', \'_\');
+			}
+		});
+	});
+', 'inline');
+	}
+?>

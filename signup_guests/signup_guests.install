@@ -1,0 +1,55 @@
+<?php
+// $Id: signup.install,v 1.24.2.4 2009/09/19 01:42:58 dww Exp $
+
+/**
+ * Implementation of hook_schema().
+ */
+function signup_guests_schema() {
+  $schema['signup_guests'] = array(
+    'description' => t('Signup module per-node settings.'),
+    'fields' => array(
+      'nid' => array(
+        'description' => t('Primary key: node ID'),
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'guests' => array(
+        'description' => t('Max # of guests users can signup to this node'),
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => FALSE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('nid'),
+  );
+  return $schema;
+}
+
+/**
+ * Implementation of hook_install().
+ */
+function signup_guests_install() {
+  // Create tables.
+  drupal_install_schema('signup_guests');
+  signup_guests_insert_default_info();
+}
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function signup_guests_uninstall() {
+  // Remove tables.
+  drupal_uninstall_schema('signup_guests');
+}
+
+/**
+ * Helper method to insert the default signup guest information into the
+ * {signup_guests} table (stored in a row for nid 0).  These are the default
+ * settings for new signup-enabled nodes.
+ */
+function signup_guests_insert_default_info() {
+  return db_query("INSERT INTO {signup_guests} (nid) SELECT nid FROM {signup} WHERE nid > 0");
+}

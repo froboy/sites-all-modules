@@ -1,0 +1,7 @@
+<html>
+	<head><title>Page not found</title></head>
+	<body>
+		<h1>Requested page not found</h1>
+		<p>We are sorry for inconvenience but the requested page could not be found. This blog was moved from this address and despite we tried hard to ensure that the old links still work, you found one that unfortunatelly doesn't. Please go to <a href="%new_url%">the new address of the blog</a>.</p>
+	</body>
+</html>

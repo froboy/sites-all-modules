@@ -1,0 +1,15 @@
+; $Id: wp2drupal.info,v 1.1.2.2 2009/04/12 04:54:52 damienmckenna Exp $
+name = WP2Drupal
+description = Import everything from a Wordpress blog.
+core = 6.x
+php = 5.1
+dependencies[] = taxonomy
+dependencies[] = path
+package = wp2drupal
+
+; Information added by drupal.org packaging script on 2009-04-17
+version = "6.x-1.6"
+core = "6.x"
+project = "wp2drupal"
+datestamp = "1239980863"
+

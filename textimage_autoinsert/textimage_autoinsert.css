@@ -1,0 +1,21 @@
+fieldset div.form-item {
+	width: 33.3%;
+	float: left;
+}
+
+fieldset div.form-item select,
+fieldset div.form-item input.form-text {
+	width: 92%;
+}
+
+fieldset div.form-item div.description {
+	line-height: 1.2em;
+	width: 98%;
+}
+
+.block-region {
+  background-color: #ff6;
+  margin-top: 4px;
+  margin-bottom: 4px;
+  padding: 3px;
+}

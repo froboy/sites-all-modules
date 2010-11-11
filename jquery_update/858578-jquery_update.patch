@@ -1,0 +1,88 @@
+Index: jquery_update.module
+===================================================================
+RCS file: /cvs/drupal-contrib/contributions/modules/jquery_update/jquery_update.module,v
+retrieving revision 1.5.2.2.2.8
+diff -u -p -r1.5.2.2.2.8 jquery_update.module
+--- jquery_update.module	23 Apr 2010 16:34:39 -0000	1.5.2.2.2.8
++++ jquery_update.module	19 Jul 2010 17:30:37 -0000
+@@ -16,6 +16,10 @@ define('JQUERY_UPDATE_REPLACE_PATH', dru
+  */
+ function jquery_update_get_replacements() {
+   return array(
++    'core' => array(
++      'misc/jquery.js' => basename(jquery_update_jquery_path()),
++      'misc/tabledrag.js' => 'tabledrag.js',
++    ),
+     'module' => array(
+       'misc/farbtastic/farbtastic.js' => 'farbtastic.js',
+       'misc/teaser.js' => 'teaser.js',
+@@ -24,9 +28,6 @@ function jquery_update_get_replacements(
+       // Certain versions of Views re-add tabledrag.js as $type 'module'.
+       'misc/tabledrag.js' => 'tabledrag.js',
+     ),
+-    'core' => array(
+-      'misc/tabledrag.js' => 'tabledrag.js',
+-    ),
+   );
+ }
+ 
+@@ -55,34 +56,34 @@ function jquery_update_theme_registry_al
+  * Replace Drupal core's jquery.js with the new one from jQuery Update module.
+  */
+ function jquery_update_preprocess_page(&$variables) {
+-  // Only do this for pages that have JavaScript on them.
+-  if (!empty($variables['scripts'])) {
+-
+-    // Perform the logic if either jQuery Update's jquery.js is newer than core's.
+-    if (variable_get('jquery_update_replace', TRUE)) {
+-      // Get an array of all the JavaScript files loaded by Drupal on this page.
+-      $scripts = drupal_add_js();
+-
+-      // Replace jquery.js first.
+-      $new_jquery = array(jquery_update_jquery_path() => $scripts['core']['misc/jquery.js']);
+-      $scripts['core'] = array_merge($new_jquery, $scripts['core']);
+-      unset($scripts['core']['misc/jquery.js']);
+-
+-      // Loop through each of the required replacements.
+-      foreach (jquery_update_get_replacements() as $type => $replacements) {
+-        foreach ($replacements as $find => $replace) {
+-          // If the file to replace is loaded on this page...
+-          if (isset($scripts[$type][$find])) {
+-            // Create a new entry for the replacement file, and unset the original one.
+-            $replace = JQUERY_UPDATE_REPLACE_PATH .'/'. $replace;
+-            $scripts[$type][$replace] = $scripts[$type][$find];
+-            unset($scripts[$type][$find]);
+-          }
++  // Only do this for pages that use JavaScript, and if our jquery.js is newer
++  // than core.
++  if (!empty($variables['scripts']) && variable_get('jquery_update_replace', TRUE)) {
++    $replacements = jquery_update_get_replacements();
++
++    // Get an array of all the JavaScript files loaded by Drupal on this page.
++    $scripts = drupal_add_js();
++
++    // Walk through all scripts and replace files as requested. Don't change
++    // the order though, or things may break.
++    $new_scripts = array();
++    foreach (array_keys($replacements) as $type) {
++      $new_scripts[$type] = array();
++      foreach ($scripts[$type] as $file => $settings) {
++        if (isset($replacements[$type][$file])) {
++          $new_file = JQUERY_UPDATE_REPLACE_PATH .'/'. $replacements[$type][$file];
++          $new_scripts[$type][$new_file] = $settings;
++        }
++        else {
++          // Copy existing entry.
++          $new_scripts[$type][$file] = $settings;
+         }
+       }
+-
+-      $variables['scripts'] = drupal_get_js('header', $scripts);
+     }
++
++    // Merge new scripts back into $scripts.
++    $scripts = array_merge($scripts, $new_scripts);
++    $variables['scripts'] = drupal_get_js('header', $scripts);
+   }
+ }
+ 

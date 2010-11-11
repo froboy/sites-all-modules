@@ -1,0 +1,37 @@
+***************
+*** 22,27 ****
+      GEvent.addListener(m, 'click', function () {
+        obj.change('clickmarker', -1, marker);
+      });
+      if (obj.vars.behavior.extramarkerevents) {
+        GEvent.addListener(m, 'mouseover', function () {
+          obj.change('mouseovermarker', -1, marker);
+--- 22,32 ----
+      GEvent.addListener(m, 'click', function () {
+        obj.change('clickmarker', -1, marker);
+      });
++     if (obj.vars.behavior.highlight) {
++       GEvent.addListener(m, 'mouseover', function () {
++         obj.change('mouseovermarker', -1, marker);
++       });
++     }
+      if (obj.vars.behavior.extramarkerevents) {
+        GEvent.addListener(m, 'mouseover', function () {
+          obj.change('mouseovermarker', -1, marker);
+***************
+*** 102,106 ****
+      }
+    });
+  
+    // @@@ TODO: Some sort of bounds handling for deletemarker? We'd have to walk the whole thing to figure out the new bounds...
+  });
+--- 107,115 ----
+      }
+    });
+  
++   obj.bind('mouseovermarker', function (marker) {
++ 	  highlightCurrentMarker(obj.map, marker);
++   });
++ 
+    // @@@ TODO: Some sort of bounds handling for deletemarker? We'd have to walk the whole thing to figure out the new bounds...
+  });

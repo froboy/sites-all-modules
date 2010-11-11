@@ -1,0 +1,6 @@
+; Developed by PeterMoulding.com. Free for use in Drupal under the GPL.
+name = pet_menu_default
+description = "Uses the node title as the default for the menu and url entries."
+package = pet
+version = "6.9"
+core = 6.x

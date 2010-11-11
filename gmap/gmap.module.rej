@@ -1,0 +1,32 @@
+***************
+*** 119,124 ****
+  
+          drupal_add_js($path . 'icon.js');
+          drupal_add_js($path . 'marker.js');
+  
+          $mm = variable_get('gmap_mm_type', 'gmap');
+          // If you really really want to override the marker manager, implement
+--- 119,125 ----
+  
+          drupal_add_js($path . 'icon.js');
+          drupal_add_js($path . 'marker.js');
++         drupal_add_js($path .'highlight.js');
+  
+          $mm = variable_get('gmap_mm_type', 'gmap');
+          // If you really really want to override the marker manager, implement
+***************
+*** 283,288 ****
+      drupal_add_js($gmap_path . '/thirdparty/' . $mms[$mm]['filename']);
+    }
+    drupal_add_js($gmap_path . '/js/marker.js');
+    drupal_add_js($gmap_path . '/js/' . $mm . '_marker.js');
+    drupal_add_js(array('gmap_markermanager' => $mms[$mm]), 'setting');
+  // @@@
+--- 296,302 ----
+      drupal_add_js($gmap_path . '/thirdparty/' . $mms[$mm]['filename']);
+    }
+    drupal_add_js($gmap_path . '/js/marker.js');
++   drupal_add_js($gmap_path . '/js/highlight.js');
+    drupal_add_js($gmap_path . '/js/' . $mm . '_marker.js');
+    drupal_add_js(array('gmap_markermanager' => $mms[$mm]), 'setting');
+  // @@@

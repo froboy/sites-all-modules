@@ -1,0 +1,13 @@
+; $Id: lineage.info,v 1.7.2.1 2009/11/15 03:11:47 agileware Exp $
+name = Taxonomy Lineage
+description = Allows other modules to sort nodes by taxonomy hierarchies
+core = 6.x
+dependencies[] = taxonomy
+dependencies[] = views
+
+; Information added by drupal.org packaging script on 2010-03-19
+version = "6.x-1.x-dev"
+core = "6.x"
+project = "lineage"
+datestamp = "1268957381"
+

@@ -1,0 +1,4 @@
+name = Signup Guests
+description = "Allow users to sign up guests for content."
+package = Signup
+core = 6.x

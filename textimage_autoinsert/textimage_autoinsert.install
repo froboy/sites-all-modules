@@ -1,0 +1,45 @@
+<?php
+// $Id: textimage_autoinsert.install,v 1.1.4.2 2009/05/03 10:18:41 danielb Exp $
+
+/**
+ * Implementation of hook_schema().
+ */
+function textimage_autoinsert_schema() {
+  $schema['textimage_autoinsert'] = array(
+    'description' => t('Table schema for Textimage Autoinsert'),
+    'fields' => array(
+      'aid' => array(
+        'description' => t('The primary identifier for this Textimage Autoinsert'),
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'weight' => array(
+        'description' => t('The ordering of this Textimage Autoinsert.'),
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'size' => 'tiny',
+      ),
+      'settings' => array(
+        'description' => t('Settings for this Textimage Autoinsert.'),
+        'type' => 'text',
+        'size' => 'big',
+        'serialize' => TRUE,
+      ),
+    ),
+    'primary key' => array('aid'),
+  );
+
+  return $schema;
+}
+
+function textimage_autoinsert_install() {
+  // Create tables.
+  drupal_install_schema('textimage_autoinsert');
+}
+
+function textimage_autoinsert_uninstall() {
+  // Remove tables.
+  drupal_uninstall_schema('textimage_autoinsert');
+}

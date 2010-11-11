@@ -1,0 +1,14 @@
+; $Id: ldapdata.info,v 1.2.4.11 2009/03/25 12:23:28 miglius Exp $
+name = Data
+description = Implements LDAP data to Drupal profiles synchronization.
+package = LDAP integration
+dependencies[] = ldapauth
+core = 6.x
+
+
+; Information added by drupal.org packaging script on 2010-07-11
+version = "6.x-1.x-dev"
+core = "6.x"
+project = "ldap_integration"
+datestamp = "1278834725"
+

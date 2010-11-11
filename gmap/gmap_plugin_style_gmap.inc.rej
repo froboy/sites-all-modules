@@ -1,0 +1,83 @@
+***************
+*** 76,89 ****
+  
+      $lat_field = 'gmap_lat';
+      $lon_field = 'gmap_lon';
+  
+      // Determine fieldname for latitude and longitude fields.
+      if ($this->options['datasource'] == 'fields') {
+        $lat_fied_obj = $this->view->display_handler->get_handler('field', $this->options['latfield']);
+        $lon_field_obj = $this->view->display_handler->get_handler('field', $this->options['lonfield']);
+  
+        $lat_field = $lat_fied_obj->field_alias;
+        $lon_field = $lon_field_obj->field_alias;
+      }
+  
+      // Determine fieldname for marker field.
+--- 81,97 ----
+  
+      $lat_field = 'gmap_lat';
+      $lon_field = 'gmap_lon';
++     $tooltip_field = 'gmap_tooltip';
+  
+      // Determine fieldname for latitude and longitude fields.
+      if ($this->options['datasource'] == 'fields') {
+        $lat_fied_obj = $this->view->display_handler->get_handler('field', $this->options['latfield']);
+        $lon_field_obj = $this->view->display_handler->get_handler('field', $this->options['lonfield']);
++       $tooltip_field_obj = $this->view->display_handler->get_handler('field', $this->options['tooltipfield']);
+  
+        $lat_field = $lat_fied_obj->field_alias;
+        $lon_field = $lon_field_obj->field_alias;
++       $tooltip_field = $tooltip_field_obj->field_alias;
+      }
+  
+      // Determine fieldname for marker field.
+***************
+*** 111,120 ****
+      foreach ($sets as $title => $records) {
+        $markers = array();
+        $offsets = array();
+        foreach ($records as $row_index => $row) {
+          $this->view->row_index = $row_index;
+          $lat = (float)$row->{$lat_field};
+          $lon = (float)$row->{$lon_field};
+          if (!empty($lat) && !empty($lon)) {
+            if ($this->options['markers'] == 'nodetype') {
+              if (isset($markertypes[$row->gmap_node_type])) {
+--- 119,154 ----
+      foreach ($sets as $title => $records) {
+        $markers = array();
+        $offsets = array();
++       $lat_center = null;
++       $lon_center = null;
++       $nid_center = null;
++       $nid_highlight = null;
++ 
++       // we search nid argument used to center map
++       if ($this->options['center_on_nodearg'] && $nodehandler = $this->view->display_handler->get_handler('argument', 'null')) {
++         $nid_center = $nodehandler->get_value();
++       }
++       if ($this->options['highlight_nodearg'] && $nodehandler = $this->view->display_handler->get_handler('argument', 'null')) {
++         $nid_highlight = $nodehandler->get_value();
++       }      
++ 
+        foreach ($records as $row_index => $row) {
+          $this->view->row_index = $row_index;
+          $lat = (float)$row->{$lat_field};
+          $lon = (float)$row->{$lon_field};
++ 
++         // if this row will be used as center map then we keep its lon/lat 
++         if (!empty($nid_center) && $nid_center == $row->nid) {
++           $lon_center = $lon;
++           $lat_center = $lat;
++         }
++         
++         
++         $tooltip = "";
++         if (!empty($tooltip_field)) {
++             $tooltip = $row->{$tooltip_field};
++         }
++         
+          if (!empty($lat) && !empty($lon)) {
+            if ($this->options['markers'] == 'nodetype') {
+              if (isset($markertypes[$row->gmap_node_type])) {

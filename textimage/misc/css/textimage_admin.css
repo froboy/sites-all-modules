@@ -1,0 +1,17 @@
+/* $Id: textimage_admin.css,v 1.1.2.5 2009/05/20 00:02:30 deciphered Exp $ */
+
+/* AHAH Preview */
+#textimage-preview
+{
+  background-image: url('../images/transparent.png');
+  border: 1px solid #999;
+  margin-right: 5%;
+  padding: 25px 25px 21px;
+  text-align: center;
+}
+
+#textimage-preview IMG
+{
+  padding: 0;
+  margin: 0;
+}

@@ -1,0 +1,76 @@
+<?php
+
+/**
+ * This script enables automatic redirection from Wordpress URLs
+ * to the new Drupal ones. This script was generated automatically
+ * by wp2drupal.module but if something went wrong, you can adjust
+ * some settings below.
+ */
+
+//*** edit the following settings only if they aren't correct ***/
+$db_host = '%db_host%'; // something like 'localhost'
+$db_user = '%db_user%'; // database user
+$db_pass = '%db_pass%'; // database password
+$db_name = '%db_name%'; // name of database in which Drupal installation resides
+$db_table = '%db_table%'; // name of table that stores redirection information
+
+$wp_url = '%wp_url%'; // URL of Wordpress installation, e.g. 'http://example.com'
+                      // or 'http://example.com/blog'. Trailing slash may or may not be present.
+                      // Must be an absolute URL.
+
+$drupal_url = '%drupal_url%'; // URL of Drupal installation, e.g. http://example.com.
+                              // Trailing slash may or may not be present.
+                              // Must be an absolute URL.
+                              
+$drupal_cool_urls = '%drupal_cool_urls%'; // true if there should be no "?q=" in the generated URL
+$custom_404_page = $wp_url . '/not-found.php'; // URL of custom 404 page, must be absolute URL
+$new_blog_path = '%new_blog_path%'; // e.g. blog/1, must be Drupal path
+
+//*** stop editing here ***//
+
+$wp_url = trim($wp_url, "/");
+$drupal_url = trim($drupal_url, "/");
+
+$requested_resource = '%requested_resource%';
+
+// If the request is "/wordpress/index.php?p=123" and the WP site URL is "http://example.com/wordpress",
+// we should concentrate only on the "?p=123" part - it is extracted as $important_part.
+$parsed_wp_url = parse_url($wp_url);
+$wp_site_path = rtrim($parsed_wp_url['path'], "/") . "/"; // trimming to handle "/" (ends with slash) vs. "/wordpress" (doesn't end with slash)
+$important_part = substr($requested_resource, strlen($wp_site_path));
+if (strpos($important_part, "index.php") === 0) {
+	$important_part = substr($important_part, strlen("index.php"));
+	$important_part = ltrim($important_part, "/");
+}
+$important_part = trim($important_part, " /");
+
+
+if ($important_part == "") {
+	header('HTTP/1.1 301 Moved Permanently');
+	header('Location: ' . $drupal_url . '/' . ($drupal_cool_urls ? '' : '?q=') . $new_blog_path);
+	header('Connection: close');
+	exit;	
+}
+
+// now it's time to lookup the database table
+$link = mysql_connect($db_host, $db_user, $db_pass);
+mysql_select_db($db_name);
+$query = "SELECT * FROM $db_table WHERE wp_path = '$important_part';";
+$redirection = mysql_fetch_assoc(mysql_query($query));
+mysql_close();
+if ($redirection !== false) {
+	header('HTTP/1.1 301 Moved Permanently');
+	header('Location: ' . $drupal_url . '/' . ($drupal_cool_urls ? '' : '?q=') . $redirection['drupal_path']);
+	exit;
+}
+else {
+  header('HTTP/1.1 404 Not Found');
+  header('Location: ' . $custom_404_page);
+  exit;
+}
+
+// returns true if $str ends with $sub
+function ends_with( $str, $sub ) {
+	return ( substr( $str, strlen( $str ) - strlen( $sub ) ) == $sub );
+}
+?>

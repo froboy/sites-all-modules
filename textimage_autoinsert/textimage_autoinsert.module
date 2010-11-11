@@ -1,0 +1,693 @@
+<?php
+/* $Id: textimage_autoinsert.module,v 1.1.2.2.2.5 2009/05/03 10:18:41 danielb Exp $ */
+
+/**
+ * Implementation of hook_theme().
+ */
+function textimage_autoinsert_theme() {
+  return array(
+    'textimage_autoinsert_admin_edit_table' => array(
+      'arguments' => array(
+        'form' => NULL,
+      ),
+    ),
+  );
+}
+
+/**
+ * Implementation of hook_help().
+ */
+function textimage_autoinsert_help($path, $arg) {
+  switch ($path) {
+    case 'admin/help#textimage_autoinsert':
+      $output = '<p>'. t('Installation: Requires some custom code in template.php, please refer to README.txt provided with module.') .'</p>';
+      $output .= '<p>'. t('Usage: Once you have added some Textimage presets, some new tabs will appear in the Textimage settings pages.') .'</p>';
+      $output .= '<p>'. t('') .'</p>';
+      /*
+      * TO DO:
+      * Write up some use case examples, one for replacing page titles, one for block titles, one for content, and one for menus.
+      *
+      */
+      return $output;
+  }
+}
+
+/**
+ * Implementation of hook_menu().
+ */
+function textimage_autoinsert_menu() {
+  $items = array();
+
+  $items['admin/settings/textimage/autoinsert'] = array(
+    'title' => 'Autoinserts',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('textimage_autoinsert_list'),
+    'access arguments' => array('administer textimage autoinserts'),
+    'weight' => 8,
+    'type' => MENU_LOCAL_TASK,
+  );
+
+  $items['admin/settings/textimage/autoinsert/list'] = array(
+    'title' => 'List',
+    'type' => MENU_DEFAULT_LOCAL_TASK
+  );
+
+  $items['admin/settings/textimage/autoinsert/new'] = array(
+    'title' => 'New',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('textimage_autoinsert_edit', 'new'),
+    'access arguments' => array('administer textimage autoinserts'),
+    'weight' => 9,
+    'type' => MENU_LOCAL_TASK,
+  );
+
+  $items['admin/settings/textimage/autoinsert/%/delete'] = array(
+    'title' => 'Delete',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('textimage_autoinsert_delete_confirm', 4),
+    'access callback' => 'textimage_autoinsert_menu_allow_tabs',
+    'weight' => 9,
+    'type' => MENU_LOCAL_TASK,
+  );
+
+  $items['admin/settings/textimage/autoinsert/%/edit'] = array(
+    'title' => 'Edit',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('textimage_autoinsert_edit', 4),
+    'access callback' => 'textimage_autoinsert_menu_allow_tabs',
+    'weight' => 9,
+    'type' => MENU_LOCAL_TASK,
+  );
+
+  return $items;
+}
+
+/**
+ * Determine whether to show edit/delete tabs.
+ */
+function textimage_autoinsert_menu_allow_tabs() {
+  if (is_numeric(arg(4))) {
+    return user_access('administer textimage autoinserts');
+  }
+  return FALSE;
+}
+
+/**
+ * Implementation of hook_perm()
+ */
+function textimage_autoinsert_perm() {
+  return array('administer textimage autoinserts');
+}
+
+/**
+ *  Get lists of choices for forms, and optionally highlight regions.
+ */
+function textimage_autoinsert_edit_options($highlight_regions = FALSE) {
+  global $theme, $theme_key, $custom_theme;
+  $options = array();
+
+  // launch custom theme
+  $custom_theme = variable_get('theme_default', 'garland');
+  init_theme();
+
+  // build a list of possible XML/HTML tags people might want to look for
+  $options['tags'] = array(
+    'a', 'abbr', 'address', 'b', 'big', 'caption', 'cite', 'code', 'dd', 'del',
+    'dfn', 'div', 'dt', 'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'i', 'ins',
+    'kbd', 'label', 'legend', 'li', 'samp', 'small', 'span', 'strong', 'sub',
+    'sup', 'td', 'th', 'tt', 'var', 
+  );
+
+  // build a list of possible page.tpl.php variables
+  $options['vars'] = array(
+    'base_path', 'body_classes', 'breadcrumb', 'closure', 'content', 
+    'db_is_active', 'directory', 'feed_icons', 'footer', 'footer_message',
+    'front_page', 'head', 'head_title', 'header', 'help', 'id', 'is_admin',
+    'is_front', 'layout', 'left', 'logged_in', 'logo', 'messages', 'mission',
+    'right', 'scripts', 'search_box', 'show_blocks', 'show_messages',
+    'site_name', 'site_slogan', 'styles', 'tabs', 'title', 'zebra',
+  );
+
+  // build a list of possible file types
+  $options['extensions'] = array('png', 'gif', 'jpg');
+
+  // build a list of regions
+  $options['regions'] = array();
+  // get regions in custom theme
+  $regions_list = system_region_list($custom_theme);
+  // a lot of themes don't use $content as a region, so add it here because we can use it too
+  if (!isset($regions_list['content'])) {
+    $regions_list['content'] = "Content";
+  }
+  $options['regions'] = array_merge($regions_list, $options['regions']);
+
+  // format the tags with <> bookends for display
+  foreach ($options['tags'] as $key => $tag) {
+    unset($options['tags'][$key]);
+    $options['tags'][$tag] = '<'. $tag .'>';
+  }
+
+  // format the vars with a $ prefix for display
+  foreach ($options['vars'] as $key => $var) {
+    unset($options['vars'][$key]);
+    $options['vars'][$var] = '$'. $var;
+  }
+
+  // format the extensions with key value pairs
+  foreach ($options['extensions'] as $key => $ext) {
+    unset($options['extensions'][$key]);
+    $options['extensions'][$ext] = $ext;
+  }
+
+  if ($highlight_regions) {
+    // highlight regions on page to provide visual reference.
+    foreach ($regions_list as $key => $value) {
+      drupal_set_content($key, '<div class="block-region">'. $value .'</div>');
+    }
+  }
+
+  // allow modules to easily manipulate the options.
+  drupal_alter('textimage_autoinsert_edit_options', $options);
+
+  return $options;
+
+}
+
+/**
+ * Textimage Autoinsert admin edit form.
+ */
+function textimage_autoinsert_edit(&$form_state, $autoinsert_id) {
+
+  // Add CSS
+  drupal_add_css(drupal_get_path('module', 'textimage_autoinsert') .'/textimage_autoinsert.css', 'module', 'all', FALSE);
+
+  // get autoinsert_id
+  if (is_numeric($autoinsert_id)) {
+    $autoinsert = _textimage_autoinsert_load($autoinsert_id);
+  }
+  else {
+    $autoinsert = array();
+  }
+
+  // get presets
+  include_once('./'. drupal_get_path('module', 'textimage') .'/textimage_admin.inc');
+  $all_presets = textimage_get_presets();
+  $presets = array();
+  foreach ($all_presets as $preset) {
+    $preset = (array)$preset;
+    $presets[$preset['pid']] = $preset['name'];
+  }
+
+  // get options for form
+  $options = textimage_autoinsert_edit_options(TRUE);
+
+  $form = array();
+  $form['#tree'] = TRUE;
+
+  $form['#autoinsert_id'] = $autoinsert_id;
+
+  $form['settings']['presets'] = array(
+    '#type' => 'select',
+    '#title' => t('Preset'),
+    '#options' => $presets,
+    '#description' => t('Which textimage preset to use for this autoinsert'),
+    '#multiple' => FALSE,
+    '#default_value' => $autoinsert['settings']['presets'],
+    '#required' => TRUE,
+  );
+
+  $form['settings']['ext'] = array(
+    '#type' => 'select',
+    '#title' => t('Image format'),
+    '#options' => $options['extensions'],
+    '#description' => t('Which image format to use for this autoinsert'),
+    '#multiple' => FALSE,
+    '#default_value' => $autoinsert['settings']['ext'],
+    '#required' => TRUE,
+  );
+
+  $form['settings']['alt'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Custom alt text'),
+    '#default_value' => '',
+    '#size' => 60,
+    '#maxlength' => 256,
+    '#required' => FALSE,
+    '#description' => t('For img tags this will be added as alt text.  Leave blank to use Textimage text instead.'),
+    '#default' => $autoinsert['settings']['alt'],
+  );
+
+  $form['settings']['title'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Custom title text'),
+    '#default_value' => '',
+    '#size' => 60,
+    '#maxlength' => 256,
+    '#required' => FALSE,
+    '#description' => t('For img tags this will be added as title text.  Leave blank to use Textimage text instead.'),
+    '#default' => $autoinsert['settings']['title'],
+  );
+
+  $form['settings']['variables'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Affect page template variables'),
+    '#collapsible' => FALSE,
+  );
+
+  $form['settings']['variables']['vars'] = array(
+    '#type' => 'select',
+    '#title' => t('Affect these vars'),
+    '#options' => array(-1 => '-'. t('none') .'-') + $options['vars'],
+    '#description' => t('If any of these variables are used to output text in your page template, they can be affected.  Many of these are not suitable for textimage in most cases.'),
+    '#size' => 8,
+    '#multiple' => TRUE,
+    '#default_value' => $autoinsert['settings']['variables']['vars'],
+  );
+
+  $form['settings']['content'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Affect page content and blocks'),
+    '#collapsible' => FALSE,
+  );
+
+  $form['settings']['content']['tags'] = array(
+    '#type' => 'select',
+    '#title' => t('Affect these tags'),
+    '#options' => array(-1 => '-'. t('none') .'-') + $options['tags'],
+    '#description' => t('You can affect the text enclosed by any of these tags.'),
+    '#size' => 8,
+    '#multiple' => TRUE,
+    '#default_value' => $autoinsert['settings']['content']['tags'],
+  );
+
+  $form['settings']['content']['attributes'] = array(
+    '#type' => 'textfield',
+    '#title' => t('With these attributes'),
+    '#size' => 30,
+    '#maxlength' => 128,
+    '#required' => FALSE,
+    '#description' => t('This can optionally be used to restrict autoinsert to only those tags which contain a certain class, id, or any attribute name/value.  You can specify the value of the attribute such as the class name (e.g. <em>title</em>), the attribute name (to test for the presence of the attribute), or you can supply the full <em>attribute="value"</em> string exactly as it appears in the code.'),
+    '#default_value' => $autoinsert['settings']['content']['attributes'],
+  );
+
+  $form['settings']['content']['areas'] = array(
+    '#type' => 'select',
+    '#title' => t('In these areas'),
+    '#options' => array(-1 => '-'. t('none') .'-') + $options['regions'],
+    '#description' => t('Select all the content areas in which to apply these settings.'),
+    '#size' => 8,
+    '#multiple' => TRUE,
+    '#default_value' => $autoinsert['settings']['content']['areas'],
+  );
+
+  $form['settings']['method'] = array(
+    '#type' => 'radios',
+    '#title' => t('Using this method'),
+    '#default_value' => 'img',
+    '#options' => array(
+      'img' => t('Replace text with an img tag for the Textimage'),
+      'bg' => t('Add style attribute with Textimage set as background-image.  For page template variables the background-image will be set on a span tag.'),
+      'span' => t('Insert img tag for the Textimage but append original text within span tag.  Useful for using one set of markup with multiple stylesheets.'),
+    
+    ),
+    '#default_value' => $autoinsert['settings']['method'] ? $autoinsert['settings']['method'] : 'img',
+  );
+  
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save Autoinsert'),
+  );
+  
+  return $form;
+
+}
+
+/**
+ * Textimage Autoinsert admin edit form submit handler.
+ */
+function textimage_autoinsert_edit_submit($form, &$form_state) {
+  if ($form['#autoinsert_id'] == 'new') {
+    $return = _textimage_autoinsert_create($form_state['values']['settings']);
+  }
+  else if (is_numeric($form['#autoinsert_id'])) {
+    $return = _textimage_autoinsert_update($form['#autoinsert_id'], $form_state['values']['settings']);
+  }
+  if ($return) {
+    drupal_set_message(t('Updated autoinsert'));
+    drupal_goto('admin/settings/textimage/autoinsert/list');
+  }
+  else {
+    drupal_set_message(t('The autoinsert was unable to be updated.'), 'error');
+  }
+}
+
+/**
+ * load a autoinsert by id.
+ * @param id
+ *    autoinsert id.
+ */
+function _textimage_autoinsert_load($id) {
+  $result = db_query('SELECT aid, settings FROM {textimage_autoinsert} WHERE aid = %d', $id);
+  $autoinsert = db_fetch_array($result);
+  
+  if ($autoinsert['aid']) {
+    $autoinsert['settings'] = unserialize($autoinsert['settings']);
+    return $autoinsert;
+  }
+  else {
+    return false;
+  }
+}
+
+/**
+ * Table list of Autoinserts
+ */
+function textimage_autoinsert_list() {
+  $form = array();
+  $form['#tree'] = TRUE;
+  $form['autoinserts'] = array(
+    '#title' => t('Textimage Autoinserts'),
+    '#heading' => t('Preset'),
+    '#weight' => 200,
+    '#theme' => 'textimage_autoinsert_admin_edit_table',
+  );
+
+  $autoinserts = textimage_autoinsert_get_autoinserts();
+  $options = textimage_autoinsert_edit_options();
+
+  if (empty($autoinserts)) {
+    $form['autoinserts'][0]['value']['#value'] =t('No autoinserts defined. <a href="!url">Create a new autoinsert</a>.',
+          array('!url' => url('admin/settings/textimage/autoinsert/new')));
+    $form['autoinserts'][0]['out']['#value'] = '';
+    $form['autoinserts'][0]['ops']['#value'] = '';
+    $form['autoinserts'][0]['weight'] = array(
+      '#type' => 'weight',
+      '#delta' => 0,
+      '#default_value' => 0,
+    );
+  }
+  else {
+    $form['autoinserts']['#suffix'] = t('
+        The order of textimage autoinserts is significant.  
+        Apply autoinserts on tags with specific classes or attributes first,
+        and let more general autoinserts come in afterward.
+      ');
+  }
+
+  foreach ($autoinserts as $aid => $autoinsert) {
+    $preset = _textimage_preset_load($autoinsert['settings']['presets']);
+
+    $vars = array();
+    if (is_array($autoinsert['settings']['variables']['vars'])) {
+      foreach ($autoinsert['settings']['variables']['vars'] as $key => $val) {
+        if ($val) {
+          $vars[] = $options['vars'][$key];
+        }
+      }
+    }
+
+    if (!empty($autoinsert['settings']['content']['tags']) && !empty($autoinsert['settings']['content']['areas'])) {
+      $tags = array();
+      if (is_array($autoinsert['settings']['content']['tags'])) {
+        foreach ($autoinsert['settings']['content']['tags'] as $key => $val) {
+          if ($val && $val != -1) {
+            $tags[] = htmlspecialchars($options['tags'][$key]);
+          }
+        }
+      }
+      $attributes = '';
+      if (trim($autoinsert['settings']['content']['attributes'])) {
+        $attributes = trim($autoinsert['settings']['content']['attributes']);
+      }
+      $areas = array();
+      if (is_array($autoinsert['settings']['content']['areas'])) {
+        foreach ($autoinsert['settings']['content']['areas'] as $key => $val) {
+          if ($val && $val != -1) {
+            $areas[] = $options['regions'][$key];
+          }
+        }
+      }
+    }
+
+    $out = '';
+    $out .= implode(", ", $vars);
+    $out .= '<br />'; // force break whether there is a line of data or not
+    if (!empty($tags)) {
+      $out .= implode(", ", $tags);
+    }
+    if (!empty($attributes)) {
+      $out .= " [". htmlspecialchars($attributes) ."]";
+    }
+    if (!empty($areas)) {
+      $out .= " (";
+      $out .= implode(", ", $areas);
+      $out .= ")";
+    }
+
+    $ops = l(t('edit'), 'admin/settings/textimage/autoinsert/'. $autoinsert['aid'] .'/edit');
+    $ops .= " &nbsp; ". l(t('delete'), 'admin/settings/textimage/autoinsert/'. $autoinsert['aid'] .'/delete');
+
+    $form['autoinserts'][$autoinsert['aid']]['value']['#value'] = check_plain($preset['name']);
+    $form['autoinserts'][$autoinsert['aid']]['out']['#value'] = $out;
+    $form['autoinserts'][$autoinsert['aid']]['ops']['#value'] = $ops;
+    $form['autoinserts'][$autoinsert['aid']]['weight'] = array(
+      '#type' => 'weight',
+      '#delta' => count($autoinserts),
+      '#default_value' => $autoinsert['weight'],
+    );
+
+  }
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save autoinserts order'),
+    '#weight' => 10010,
+  );
+
+  return $form;
+}
+
+/**
+ * Submit function for admin textimage_autoinsert list form.
+ */
+function textimage_autoinsert_list_submit($form, &$form_state) {
+  $values = &$form_state['values'];
+  if (is_array($values['autoinserts'])) {
+    foreach ($values['autoinserts'] as $aid => $value) {
+      _textimage_autoinsert_weight($aid, $value['weight']);
+    }
+  }  
+}
+
+/**
+ * Get a list of autoinserts.
+ */
+function textimage_autoinsert_get_autoinserts() {
+  $result = db_query('SELECT * FROM {textimage_autoinsert} ORDER BY weight');
+  $autoinserts = array();
+  while ($autoinsert = db_fetch_array($result)) {
+    $autoinsert['settings'] = unserialize($autoinsert['settings']);
+    $autoinserts[$autoinsert['aid']] = $autoinsert;
+  }
+  return $autoinserts;
+}
+
+/**
+ * Delete confirmation form.
+ */
+function textimage_autoinsert_delete_confirm($form_state, $autoinsert_id) {
+  
+  $form['#aid'] = $autoinsert_id;
+  
+  return confirm_form($form,
+    t('Are you sure you want to delete the autoinsert?'),
+    $_GET['destination'] ? $_GET['destination'] : 'admin/settings/textimage/autoinsert/list',
+    t('This action cannot be undone.'),
+    t('Delete'), t('Cancel')
+  );
+}
+
+/**
+ * Delete confirmation form submit handler.
+ */
+function textimage_autoinsert_delete_confirm_submit($form, &$form_state) {
+  _textimage_autoinsert_delete($form['#aid']);
+  drupal_set_message(t('Deleted autoinsert'));
+  drupal_goto('admin/settings/textimage/autoinsert/list');
+}
+
+/**
+ * Create an autoinsert.
+ */
+function _textimage_autoinsert_create($settings) {
+  $autoinsert = array(
+    'settings' => $settings,
+  );
+  return drupal_write_record('textimage_autoinsert', $autoinsert);
+}
+
+/**
+ * Update an autoinsert's settings.
+ */
+function _textimage_autoinsert_update($id, $settings) {
+  $autoinsert = array(
+    'aid' => $id,
+    'settings' => $settings,
+  );
+  return drupal_write_record('textimage_autoinsert', $autoinsert, 'aid');
+}
+
+/**
+ * Update an autoinsert's weight.
+ */
+function _textimage_autoinsert_weight($id, $weight) {
+  $autoinsert = array(
+    'aid' => $id,
+    'weight' => $weight,
+  );
+  return drupal_write_record('textimage_autoinsert', $autoinsert, 'aid');
+}
+
+/**
+ * Delete an autoinsert.
+ */
+function _textimage_autoinsert_delete($id) {
+  return db_query('DELETE FROM {textimage_autoinsert} where aid = %d', $id);
+}
+
+/**
+ *  Manipulate template variables.
+ */
+function textimage_autoinsert_preprocess_vars(&$vars, $hook) {
+  $autoinserts = textimage_autoinsert_get_autoinserts();
+
+  foreach ($autoinserts as $autoinsert) {
+    $preset = _textimage_preset_load($autoinsert['settings']['presets']);
+    $preset = $preset['name'];
+    $ext = &$autoinsert['settings']['ext'];
+    $method = &$autoinsert['settings']['method'];
+    $alt = &$autoinsert['settings']['alt'];
+    $title = &$autoinsert['settings']['title'];
+    $attributes = &$autoinsert['settings']['content']['attributes'];
+
+    foreach ($autoinsert['settings']['variables']['vars'] as $key => $val) {
+      if ($val) {
+        if ($method == 'img') {
+         $txtimg = theme('textimage_image', $preset, trim($vars[$key]), array(), $ext, $alt ? $alt : $vars[$key], $title ? $title : $vars[$key]);
+          $vars[$key] = $txtimg;
+        }
+        else if ($method == 'bg') {
+          $base = substr(base_path(), 1, strlen(base_path()));
+          $txtimg_path = $base . textimage_autoinsert_path($preset, $vars[$key], array(), $ext);
+          $vars[$key] = '<span class="textimage-autoinsert" style="background-image: url(/'. $txtimg_path .');">'. $vars[$key] .'</span>';
+        }
+        else if ($method == 'span') {
+          $txtimg = theme('textimage_image', $preset, trim($vars[$key]), array(), $ext, $alt ? $alt : $vars[$key], $title ? $title : $vars[$key]);
+          $vars[$key] = $txtimg .'<span class="textimage-plaintext">'. $vars[$key] .'</span>';
+        }
+      }
+    }
+
+    foreach ($autoinsert['settings']['content']['areas'] as $area_key => $area_val) {
+      foreach ($autoinsert['settings']['content']['tags'] as $tag_key => $tag_val) {
+        $tmp_data = $vars[$area_key];
+        $return_data = "";
+        while (preg_match('/^(.*?)(\<'. $tag_key .'[^\>]*?'. $attributes .'[^\>]*\>)(.*?)(\<\/'. $tag_key .'[^\>]*\>)(.*)$/si', $tmp_data, $matches)) {
+          if ($method == 'img') {
+            $return_data .= $matches[1];
+            $return_data .= $matches[2];
+            if (strpos($matches[3], 'img src=') === false) {
+              $return_data .= theme('textimage_image', $preset, trim($matches[3]), array(), $ext, ($alt ? $alt : $matches[3]), ($title ? $title : $matches[3]), NULL, TRUE);
+            }
+            else {
+              $return_data .= $matches[3];
+            }
+
+            $return_data .= $matches[4];
+            $tmp_data = $matches[5];
+          }
+          else if ($method == 'bg') {
+            $return_data .= $matches[1];
+           if (strpos($matches[2], ' style="background-image: url(/') === false) {
+              $base = substr(base_path(), 1, strlen(base_path()));
+              $txtimg_path = $base . textimage_autoinsert_path($preset, $matches[3], array(), $ext);
+              $return_data .= str_replace('<'. $tag_key, '<'. $tag_key .' style="background-image: url(/'. $txtimg_path .');"', $matches[2]);
+            }
+            $return_data .= $matches[3];
+            $return_data .= $matches[4];
+            $tmp_data = $matches[5];
+          }
+          else if ($method == 'span') {
+            $return_data .= $matches[1];
+            $return_data .= $matches[2];
+            if (strpos($matches[3], 'img src=') === false) {
+              $return_data .= theme('textimage_image', $preset, trim($matches[3]), array(), $ext, ($alt ? $alt : $matches[3]), ($title ? $title : $matches[3]), NULL, TRUE);
+              $return_data .= '<span class="textimage-plaintext">'. $matches[3] .'</span>';
+            }
+            else {
+              $return_data .= $matches[3];
+            }
+            $return_data .= $matches[4];
+            $tmp_data = $matches[5];
+          }
+        }
+        $vars[$area_key] = $return_data . $tmp_data;
+      }
+    }
+
+  }
+
+}
+
+/**
+ *  Implements hook_theme_registry_alter.
+ */
+function textimage_autoinsert_theme_registry_alter(&$theme_registry) {
+  $theme_registry['page']['preprocess functions'][] = 'textimage_autoinsert_preprocess_vars';
+}
+
+/**
+ *  Gets path from appropriate textimage module function.
+ */
+function textimage_autoinsert_path($preset, $text, $additional, $format) {
+  if (function_exists('textimage_build_image')) {
+    // version 2 of textimage
+    return textimage_build_image('theme', $preset, trim($text), $additional, $format);
+  }
+  else {
+    // version 1 of textimage
+    return textimage_path($preset, trim($text), $additional, $format);
+  }
+}
+
+/**
+ * Theme the admin table of draggable actions.
+ */
+function theme_textimage_autoinsert_admin_edit_table($form) {
+  $children = element_children($form);
+  if (!empty($children)) {
+    $css_id = 'textimage-autoinsert-admin-edit-table-'. strtolower(str_replace(' ', '-', $form['#heading']));
+    $css_class = 'textimage-autoinsert-admin-edit-table';
+    drupal_add_tabledrag($css_id, 'order', 'sibling', $css_class);
+    $rows = array();
+    $headers = array(t($form['#heading']), t('Affects'), t('Weight'), t('Operations'));
+    foreach ((array)$children as $key) {
+      $value = &$form[$key];
+      $value['weight']['#attributes']['class'] = $css_class;
+      $rows[] = array(
+        'data' => array(
+          drupal_render($value['value']),
+          drupal_render($value['out']),
+          drupal_render($value['weight']),
+          drupal_render($value['ops']),
+        ),
+        'class' => 'draggable',
+      );
+    }
+    $output = theme('table', $headers, $rows, array('id' => $css_id));
+  }
+  else {
+    $output = t("There are no items to display");
+  }
+  return theme('item', array('#title' => $form['#title'], '#value' => $output));
+}

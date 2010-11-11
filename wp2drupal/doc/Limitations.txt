@@ -1,0 +1,25 @@
+Wp2Drupal is not a standalone migration script but rather a standard Drupal module.
+
+PROS:
++ Familiar user interface
++ Script can use Drupal functions instead of raw database access
+
+CONS:
+- Raw Wordpress queries (issued using standard mysql_query) somehow interfere with Drupal connection settings. For example, this is imposible:
+
+while ($wp_post = mysql_fetch_assoc($result)) {
+  watchdog(...);
+}
+
+because watchdog() internally issues db_query command and this can not occur within while loop with another active MySQL connection. Consequences: you must write something like
+
+$wp_posts = array();
+while ($wp_post = mysql_fetch_assoc($result)) {
+  $wp_posts[] = $wp_post;
+}
+
+foreach ($wp_posts as $wp_post) {
+  watchdog(...);
+}
+
+A big drawback is that when there are many posts, $wp_posts can become very large. One possible solution is to store MySQL results into, say, SQLite database but this optimization feature is not currently implemented.

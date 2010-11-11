@@ -1,0 +1,11 @@
+; $Id: textimage_autoinsert.info,v 1.1.2.1.2.1 2009/02/22 11:08:08 danielb Exp $
+name = Textimage Autoinsert
+description = "Allows users to easily use Textimage presets without any PHP."
+dependencies[] = textimage
+core = 6.x
+; Information added by drupal.org packaging script on 2009-08-23
+version = "6.x-2.0"
+core = "6.x"
+project = "textimage_autoinsert"
+datestamp = "1251014484"
+

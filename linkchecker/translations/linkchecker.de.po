@@ -1,0 +1,412 @@
+# $Id: linkchecker.de.po,v 1.1.2.5 2009/03/25 23:26:08 hass Exp $
+#
+# LANGUAGE translation of Drupal (general)
+# Copyright YEAR NAME <EMAIL@ADDRESS>
+# Generated from files:
+#  linkchecker.admin.inc,v 1.1.2.5 2009/01/28 21:00:26 hass
+#  linkchecker.module,v 1.7.2.12 2009/01/30 20:24:05 hass
+#  linkchecker.info,v 1.2.2.2 2009/01/25 23:41:02 hass
+#  linkchecker.install,v 1.2.2.5 2009/01/29 07:58:01 hass
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: German translation of Linkchecker\n"
+"POT-Creation-Date: 2009-03-26 00:01+0100\n"
+"PO-Revision-Date: 2009-03-26 00:23+0100\n"
+"Last-Translator: Alexander Haß\n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n!=1)\n"
+"X-Poedit-Language: German\n"
+"X-Poedit-Country: GERMANY\n"
+
+#: linkchecker.admin.inc:13
+msgid "General settings"
+msgstr "Allgemeine Einstellungen"
+
+#: linkchecker.admin.inc:18
+msgid "Scan node types for links"
+msgstr "Beitragstypen nach Links durchsuchen"
+
+#: linkchecker.admin.inc:21
+msgid "Enable link checking for the selected node type(s)."
+msgstr "Aktiviert die Linküberprüfung für die ausgewählten Beitragstypen."
+
+#: linkchecker.admin.inc:25;49
+msgid "Depends on: !dependencies"
+msgstr "Abhängig von: !dependencies"
+
+#: linkchecker.admin.inc:25;49
+msgid "@module (<span class=\"admin-enabled\">enabled</span>)"
+msgstr "@module (<span class=\"admin-enabled\">aktiviert</span>)"
+
+#: linkchecker.admin.inc:25;49
+msgid "@module (<span class=\"admin-disabled\">disabled</span>)"
+msgstr "@module (<span class=\"admin-disabled\">deaktiviert</span>)"
+
+#: linkchecker.admin.inc:31
+msgid "Scan comments for links"
+msgstr "Kommentare nach Links durchsuchen"
+
+#: linkchecker.admin.inc:32
+msgid "Enable this checkbox if links in comments of the above selected node type(s) should be checked."
+msgstr "Dieses Kontrollkästchen aktivieren, um Links in den Kommentaren der oberhalb ausgewählten Beitragstypen zu überprüfen."
+
+#: linkchecker.admin.inc:38
+msgid "Scan blocks for links"
+msgstr "Blöcke nach Links durchsuchen"
+
+#: linkchecker.admin.inc:39
+msgid "Enable this checkbox if links in blocks should be checked."
+msgstr "Dieses Kontrollkästchen aktivieren, um Links in Blöcken zu überprüfen."
+
+# Domain -> URLs
+#: linkchecker.admin.inc:44
+msgid "Check full qualified domain names only"
+msgstr "Nur vollständige Domänennamen überprüfen"
+
+#: linkchecker.admin.inc:45
+msgid "Enable this checkbox if only full qualified URLs should be checked. If unchecked, all internal and external URLs will be checked."
+msgstr "Dieses Kontrollkästchen aktivieren, wenn nur vollständige URLs überprüft werden sollen. Sobald deaktiviert, werden alle internen und externen URLs überprüft."
+
+#: linkchecker.admin.inc:55
+msgid "Pathfilter module support"
+msgstr "Pathfilter Modul-Unterstützung"
+
+#: linkchecker.admin.inc:56
+msgid "Enable this checkbox for <a href=\"@pathfilter\">pathfilter</a> module support."
+msgstr "Dieses Kontrollkästchen für die <a href=\"@pathfilter\">Pathfilter</a>-Modul-Unterstützung aktivieren."
+
+#: linkchecker.admin.inc:62
+msgid "Check settings"
+msgstr "Überprüfungseinstellungen"
+
+#: linkchecker.admin.inc:63
+msgid "For simultaneous link checks it is highly recommended to install the <a href=\"@curl\">cURL</a> library. This may be <strong>necessary</strong> on larger sites with very many links, but may still improve (speed up), link checking performance on smaller sites."
+msgstr ""
+
+#: linkchecker.admin.inc:68
+msgid "User-Agent"
+msgstr "User-Agent"
+
+#: linkchecker.admin.inc:69
+msgid "Defines the user agent that will be used for checking links on remote sites. If someone blocks the standard Drupal user agent you can try with a more common browser."
+msgstr "Bestimmt den zur Überprüfung von entfernten Websites zu verwendenden User-Agent. Sollte jemand den standardmäßigen Drupal User-Agent blockieren, kann ein normaler Browser verwendet werden."
+
+#: linkchecker.admin.inc:89
+msgid "Check interval for links"
+msgstr "Überprüfungsinterval für Links"
+
+#: linkchecker.admin.inc:90
+msgid "This interval setting defines how often cron will re-check the status of links."
+msgstr "Diese Intervalleinstellung legt fest, wie oft Cron den Status von Links überprüft."
+
+#: linkchecker.admin.inc:96
+msgid "Cleanup interval for unused links"
+msgstr "Bereinigungsinterval für ungenutzt Links"
+
+#: linkchecker.admin.inc:97
+msgid "This interval setting defines how often cron will clean up unused links."
+msgstr "Diese Intervalleinstellung legt fest, wie oft Cron die ungenutzten Links bereinigt."
+
+#: linkchecker.admin.inc:104
+msgid "Error handling"
+msgstr "Fehlerbehandlung"
+
+#: linkchecker.admin.inc:105
+msgid "Defines error handling and custom actions to be executed if specific HTTP requests are failing."
+msgstr ""
+
+#: linkchecker.admin.inc:109
+msgid "Update permanently moved links"
+msgstr "Dauerhaft verschobene Links aktualisieren"
+
+#: linkchecker.admin.inc:110
+msgid "If enabled, outdated links in content providing a <em>Moved Permanently</em> (status code 301) are automatically updated to the most recent URL. If used, it is recommended to use a value of <em>three</em> to make sure this is not only a temporarily change. This feature trust remote sites to provide a valid permanent redirect. Changes will be logged in <a href=\"@dblog\">recent log entries</a>."
+msgstr ""
+
+#: linkchecker.admin.inc:114;128
+msgid "Disabled"
+msgstr "Deaktiviert"
+
+#: linkchecker.admin.inc:115
+msgid "After one failed check"
+msgstr "Nach einer fehlgeschlagenen Überprüfung"
+
+#: linkchecker.admin.inc:116
+msgid "After two failed checks"
+msgstr "Nach zwei fehlgeschlagenen Überprüfungen"
+
+#: linkchecker.admin.inc:117
+msgid "After three failed checks"
+msgstr "Nach drei fehlgeschlagenen Überprüfungen"
+
+#: linkchecker.admin.inc:118
+msgid "After five failed checks"
+msgstr "Nach fünf fehlgeschlagenen Überprüfungen"
+
+#: linkchecker.admin.inc:119
+msgid "After ten failed checks"
+msgstr "Nach zehn fehlgeschlagenen Überprüfungen"
+
+#: linkchecker.admin.inc:123
+msgid "Unpublish node on file not found error"
+msgstr "Beitragsveröffentlichung bei „Datei wurde nicht gefunden“-Fehler zurückziehen"
+
+#: linkchecker.admin.inc:124
+msgid "If enabled, a node with one or more broken links (status code 404) will be unpublished and moved to moderation queue for review after the number of specified fails. If used, it is recommended to use a value of <em>three</em> to make sure this is not only a temporarily error."
+msgstr ""
+
+#: linkchecker.admin.inc:129
+msgid "After one file not found error"
+msgstr "Nach einem „Datei wurde nicht gefunden“-Fehler"
+
+#: linkchecker.admin.inc:130
+msgid "After two file not found errors"
+msgstr "Nach zwei „Datei wurde nicht gefunden“-Fehlern"
+
+#: linkchecker.admin.inc:131
+msgid "After three file not found errors"
+msgstr "Nach drei „Datei wurde nicht gefunden“-Fehlern"
+
+#: linkchecker.admin.inc:132
+msgid "After five file not found errors"
+msgstr "Nach fünf „Datei wurde nicht gefunden“-Fehlern"
+
+#: linkchecker.admin.inc:133
+msgid "After ten file not found errors"
+msgstr "Nach zehn „Datei wurde nicht gefunden“-Fehlern"
+
+#: linkchecker.admin.inc:139
+msgid "Don't treat these response codes as errors"
+msgstr "Diese Antwort-Codes nicht als Fehler behandeln"
+
+#: linkchecker.admin.inc:140
+msgid "One HTTP status code per line, e.g. 403."
+msgstr "Ein HTTP-Status-Code pro Zeile, z.b. 403."
+
+#: linkchecker.admin.inc:145
+msgid "Before using either of these options to clear link data, use the <em>Save configuration</em> button below to save any changes you may have made above."
+msgstr ""
+
+#: linkchecker.admin.inc:146
+msgid "These actions will either clear all link checker tables in the database and/or analyze all selected node types, blocks and cck fields (see settings above) for new/updated/removed links. Normally there is no need to press one of these buttons. Use this only for immediate cleanup tasks and to force a full re-build of the links to be checked in the linkchecker tables."
+msgstr ""
+
+#: linkchecker.admin.inc:147
+msgid "<strong>Note</strong>: These functions ONLY collect the links, they do not evaluate the HTTP response codes, this will be done during normal cron runs."
+msgstr "<strong>Hinweis</strong>: Mit diesen Funktionen werden die Links NUR erfasst. Die HTTP-Antwortcodes werden nicht ausgewertet, da dies während dem normalen Cron-Lauf erfolgt."
+
+#: linkchecker.admin.inc:151
+msgid "Clear link data"
+msgstr "Linkdaten leeren"
+
+#: linkchecker.admin.inc:158
+msgid "Analyze content for links"
+msgstr "Inhalt nach Links durchsuchen"
+
+#: linkchecker.admin.inc:163
+msgid "Clear link data and analyze content for links"
+msgstr "Linkdaten leeren und Inhalt nach Links durchsuchen"
+
+#: linkchecker.admin.inc:167
+msgid "Save configuration"
+msgstr "Konfiguration speichern"
+
+#: linkchecker.admin.inc:168
+msgid "Reset to defaults"
+msgstr "Zurücksetzen"
+
+#: linkchecker.admin.inc:178
+msgid "Invalid response code %code found."
+msgstr "Ungültiger Antwort-Code %code wurde gefunden."
+
+#: linkchecker.admin.inc:271
+msgid "URL"
+msgstr "URL"
+
+#: linkchecker.admin.inc:272
+msgid "Response"
+msgstr "Antwort"
+
+#: linkchecker.admin.inc:273
+msgid "Error"
+msgstr "Fehler"
+
+#: linkchecker.admin.inc:274
+msgid "Operations"
+msgstr "Operationen"
+
+#: linkchecker.admin.inc:299
+msgid "Edit node @node"
+msgstr "Beitrag @node bearbeiten"
+
+#: linkchecker.admin.inc:305
+msgid "Edit comment @comment"
+msgstr "Kommentar @comment bearbeiten"
+
+#: linkchecker.admin.inc:311
+msgid "Edit block @block"
+msgstr "Block @node bearbeiten"
+
+#: linkchecker.admin.inc:324
+msgid "No broken links have been found."
+msgstr "Es wurden keine beschädigten Links gefunden."
+
+#: linkchecker.admin.inc:264
+msgid "There is 1 unchecked link of about @links_all links in the database. Please be patient until all links have been checked via cron."
+msgid_plural "There are @count unchecked links of about @links_all links in the database. Please be patient until all links have been checked via cron."
+msgstr[0] "Es gibt 1 nicht überprüften Link von @links_all Links in der Datenbank. Es erfordert etwas Geduld, bis alle Links mit Hilfe von Cron überprüft wurden."
+msgstr[1] "Es gibt @count nicht überprüfte Links von @links_all Links in der Datenbank. Es erfordert etwas Geduld, bis alle Links mit Hilfe von Cron überprüft wurden."
+
+#: linkchecker.module:25
+msgid "This module provides an aid to finding broken links on your site. It periodically checks contents of all public nodes, tries to find any html links and check for their validity. It reports broken links through the admin interface. For more information about status codes see <a href=\"@rfc\">Status Code Definitions</a>."
+msgstr ""
+
+#: linkchecker.module:73
+msgid "Scanning nodes for links"
+msgstr "Beiträge werden nach Links durchsucht"
+
+#: linkchecker.module:102
+msgid "Finished importing nodes with an error."
+msgstr "Das Importieren von Beiträgen wurde mit einem Fehler beendet."
+
+#: linkchecker.module:124
+msgid "Scanning comments for links"
+msgstr "Kommentare werden nach Links durchsucht"
+
+#: linkchecker.module:153
+msgid "Finished importing comments with an error."
+msgstr "Das Importieren von Kommentaren wurde mit einem Fehler beendet."
+
+#: linkchecker.module:174
+msgid "Scanning blocks for links"
+msgstr "Blöcke werden nach Links durchsucht"
+
+#: linkchecker.module:202
+msgid "Finished importing blocks with an error."
+msgstr "Das Importieren von Blöcken wurde mit einem Fehler beendet."
+
+#: linkchecker.module:387;393;411;45
+msgid "Broken links"
+msgstr "Beschädigte Links"
+
+#: linkchecker.module:333;357;382;387;393;411;844;1020;0
+msgid "linkchecker"
+msgstr "linkchecker"
+
+#: linkchecker.module:333
+msgid "Changed permanently moved link in %node from %src to %dst."
+msgstr "Dauerhaft verschobener Link in Beitrag %node wurde von %src auf %dst geändert."
+
+#: linkchecker.module:357
+msgid "Changed permanently moved link in comment %comment from %src to %dst."
+msgstr "Dauerhaft verschobener Link in Kommentar %comment wurde von %src auf %dst geändert."
+
+#: linkchecker.module:382
+msgid "Changed permanently moved link in box %bid from %src to %dst."
+msgstr "Dauerhaft verschobener Link in Box %bid wurde von %src auf %dst geändert."
+
+#: linkchecker.module:387
+msgid "Link %link has changed and needs to be updated."
+msgstr "Link %link wurde geändert und muss aktualisiert werden."
+
+#: linkchecker.module:393
+msgid "Broken link %link has been found."
+msgstr "Ein beschädigter Link %link wurde gefunden."
+
+#: linkchecker.module:411
+msgid "Method HEAD is not allowed for link %link. Method has been changed to GET."
+msgstr "Die Methode HEAD ist für den Link %link nicht zulässig. Die Methode wurde auf GET geändert."
+
+#: linkchecker.module:844
+msgid "Wiped out obsolete links."
+msgstr "Veraltete Links wurden beseitigt."
+
+#: linkchecker.module:1020
+msgid "Set @type %title to unpublished."
+msgstr "Die Veröffentlichung von @type %title wurde zurückgezogen."
+
+#: linkchecker.module:99
+msgid "One node has been scanned."
+msgid_plural "@count nodes have been scanned."
+msgstr[0] "Ein Beitrag wurde durchsucht."
+msgstr[1] "@count Beiträge wurden durchsucht."
+
+#: linkchecker.module:150
+msgid "One comment has been scanned."
+msgid_plural "@count comments have been scanned."
+msgstr[0] "Ein Kommentar wurde durchsucht."
+msgstr[1] "@count Kommentare wurden durchsucht."
+
+#: linkchecker.module:199
+msgid "One block has been scanned."
+msgid_plural "@count block have been scanned."
+msgstr[0] "Ein Block wurde durchsucht."
+msgstr[1] "@count Blöcke wurden durchsucht."
+
+#: linkchecker.module:448;498
+msgid "Link check of <a href=\"@url\">@url</a> failed once (status code: @code)."
+msgid_plural "Link check of <a href=\"@url\">@url</a> failed @count times (status code: @code)."
+msgstr[0] "Die Linküberprüfung von <a href=\"@url\">@url</a> ist einmal fehlgeschlagen (Status-Code: @code)."
+msgstr[1] "Die Linküberprüfung von <a href=\"@url\">@url</a> ist @count mal fehlgeschlagen (Status-Code: @code)."
+
+#: linkchecker.module:15
+msgid "access linkchecker"
+msgstr "Zugriff auf Linkchecker"
+
+#: linkchecker.module:15
+msgid "administer linkchecker"
+msgstr "Linkchecker verwalten"
+
+#: linkchecker.module:37
+#: linkchecker.info:0
+msgid "Link checker"
+msgstr "Link checker"
+
+#: linkchecker.module:38
+msgid "Link checker configuration."
+msgstr "Konfiguration von Link checker."
+
+#: linkchecker.module:46
+msgid "Shows a list of broken links in content."
+msgstr "Zeigt im Inhalt eine Liste von beschädigten Links an."
+
+#: (duplicate) linkchecker.install:164
+msgid "HTTP request status"
+msgstr "HTTP-Anfragestatus"
+
+#: (duplicate) linkchecker.install:165
+msgid "Fails"
+msgstr "Fehlgeschlagen"
+
+#: (duplicate) linkchecker.install:167
+msgid "Your system or network configuration does not allow Drupal to access web pages, resulting in reduced functionality. This could be due to your webserver configuration or PHP settings, and should be resolved in order to download information about available updates, fetch aggregator feeds, sign in via OpenID, or use other network-dependent services."
+msgstr "Die Funktionalität der Website ist eingeschränkt, da Drupal nicht auf externe Internetseiten zugreifen kann. Grund dafür sind die aktuellen System- oder Netzwerkeinstellungen wie etwa die Konfiguration des Webservers oder die PHP-Einstellungen. Der Zugriff wird benötigt, um netzbasierte Dienste nutzen zu können. Beispiele hierfür sind der Abruf verfügbarer Aktualisierungen, der Abruf von Aggregator-Feeds oder die Anmeldung via OpenID."
+
+#: (duplicate) linkchecker.install:175
+msgid "MySQL database"
+msgstr "MySQL-Datenbank"
+
+#: (duplicate) linkchecker.install:178
+msgid "Your MySQL Server is too old. Link Checker requires at least MySQL %version."
+msgstr "Der MySQL-Server ist zu alt. Link-Checker benötigt mindestens MySQL %version."
+
+#: (duplicate) linkchecker.install:186
+msgid "Job queue"
+msgstr "Job-Warteschlange"
+
+#: (duplicate) linkchecker.install:187
+msgid "Not found"
+msgstr "Nicht gefunden"
+
+#: (duplicate) linkchecker.install:189
+msgid "Install job_queue module if you have a node, comment or block with more than 100 links. Without the job_queue module only the first 100 links will be checked!"
+msgstr "Das job_queue-Modul sollte installiert werden, wenn ein Beitrag, Kommentar oder Block mit mehr als 100 Links vorhanden ist. Ohne das  job_queue-Modul werden nur die ersten 100 Links überprüft."
+
+#: linkchecker.info:0
+msgid "Periodically checks for broken links in node types, blocks and cck fields and reports the results."
+msgstr "Überprüft regelmäßig auf beschädigte Links in Beitragstypen, Blöcken und CCK-Feldern und Berichtet die Ergebnisse."
+

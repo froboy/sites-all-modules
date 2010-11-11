@@ -1,0 +1,21 @@
+/******************************************************************************
+ *                                                                            *
+ * Part of wp2drupal module. Author: Borek Bernard, http://www.borber.com/    *
+ *                                                                            *
+ ******************************************************************************/
+
+table#Wp2DrupalResults {
+  width: 100%;
+}
+
+table#Wp2DrupalResults tr.ok {
+  background-color: #CAFFC7;
+}
+
+table#Wp2DrupalResults tr.warning {
+  background-color: #FDFFB1;
+}
+
+table#Wp2DrupalResults tr.error {
+  background-color: #FFBEAC;
+}

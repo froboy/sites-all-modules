@@ -1,0 +1,671 @@
+<?php
+// $Id: wp2drupal.module,v 1.1.2.11 2009/04/17 14:58:13 damienmckenna Exp $
+
+/**
+ * @file
+ * This module imports everything from a Wordpress blog.
+ */
+
+/**
+ * Implementation of hook_help().
+ */
+function wp2drupal_help($path, $arg) {
+  switch ($path) {
+    case 'admin/modules#description':
+      return t('Migrates Wordpress posts and comments to Drupal.');
+
+    case 'admin/help#wp2drupal':
+      $helptext = '<p>Wp2Drupal is a module designed to allow seamless migration from Wordpress 1.5, 2.x to Drupal 6.x. Visit <a href="%WP2DRUPAL%">admin/wp2drupal</a> and follow instructions.</p>';
+      $helptext .= '<h2>Some things you should know</h2>';
+      $helptext .= '<p>See the <a href="%Introduction_URL%">introduction step</a> of the migration process.</p>';
+      $helptext .= '<h2>Unsupported features</h2>';
+      $helptext .= '<ul>';
+      $helptext .= '<li>The script is generally prepared just for simple Wordpress installations so do not try to migrate a multi-site Wordpress megablog.</li>';
+      $helptext .= '<li>Custom meta-information (inserted in post creation form) will be lost.</li>';
+      $helptext .= '</ul>';
+      $helptext .= '<h2>URL rewriting</h2>';
+      $helptext .= '<p>This module will create simple database table containing information about old Wordpress path and the new corresponding Drupal URL.';
+      $helptext .= 'This is more flexible and performant way than directly creating .htaccess file containing rewrite rules (more flexible because not everybody';
+      $helptext .= 'runs Apache and more performant because database access is quicker than large text file parsing).</p>';
+      $helptext .= '<p>Migration module contains a simple "wp2drupal_rewrite.php" file and all the magic is in creating .htaccess file that will redirect all';
+      $helptext .= 'requests to old Wordpress URLs to this file - it will lookup the database table, send correct HTTP headers (301 Moved Permanently) and redirect';
+      $helptext .= 'user to the new Drupal URL.</p>';
+
+      $output = t($helptext, array(
+        '%WP2DRUPAL%' => url('admin/wp2drupal'),
+        '%Introduction_URL%' => url('admin/wp2drupal'),
+      ));
+      return $output;
+  }
+}
+
+/**
+ * hook_perm(), defines the permissions
+ */
+function wp2drupal_perm() {
+  return array('administer wp2drupal', );
+}
+
+/**
+ * hook_menu(), defines the menu items
+ */
+function wp2drupal_menu() {
+  $items = array();
+
+  $items['admin/wp2drupal'] = array(
+    'title' => 'Import Wordpress',
+    'description' => 'Import Wordpress Blog',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('wp2drupal_form_settings', ),
+    'access callback' => 'user_access',
+    'access arguments' => array('administer wp2drupal', ),
+  );
+  $items['admin/wp2drupal/introduction'] = array(
+    'parent' => 'admin/wp2drupal',
+    'title' => 'Introduction',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'access callback' => 'user_access',
+    'access arguments' => array('administer wp2drupal', ),
+  );
+  $items['admin/wp2drupal/settings'] = array(
+    'title' => 'Settings',
+    'type' => MENU_LOCAL_TASK,
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('wp2drupal_form_settings', ),
+    'access callback' => 'user_access',
+    'access arguments' => array('administer wp2drupal', ),
+    'weight' => 1,
+  );
+  $items['admin/wp2drupal/results'] = array(
+    'title' => 'Results',
+    'type' => MENU_LOCAL_TASK,
+    'page callback' => 'wp2drupal_form_results',
+    'access callback' => 'user_access',
+    'access arguments' => array('administer wp2drupal', ),
+    'weight' => 2,
+  );
+  $items['admin/wp2drupal/finalsteps'] = array(
+    'title' => 'Final steps',
+    'type' => MENU_LOCAL_TASK,
+    'page callback' => 'wp2drupal_form_final_steps',
+    'access arguments' => array('administer wp2drupal', ),
+    'access callback' => 'user_access',
+    'weight' => 3,
+  );
+  return $items;
+}
+
+/**
+ * Menu callback. Form allows admin to set these variables: (TODO: finish this doc)
+ */
+function wp2drupal_form_settings(&$form_state, $edit = array()) {
+
+  // user must have 'administer wp2drupal' permissions
+  if (!user_access('administer wp2drupal')) {
+    $output = array(
+      'message' => array(
+        '#value' => '<p class="error">'. t('You are not authorized to import posts and comments from Wordpress (you must have \'import from wordpress\' access permissions).') .'</p>',
+      ),
+    );
+    return $output;
+  }
+
+  if (!_check_prerequisites($message)) {
+    $error = array(
+      'message' => array(
+        '#value' => '<p class="error">'. $message .'</p>',
+      ),
+    );
+    return $error;
+  }
+
+  $wp_defaults = array(
+    'db_user' => isset($_SESSION['wp2drupal']) ? $_SESSION['wp2drupal']['wordpress']['db_user'] : '',
+    'db_pass' => isset($_SESSION['wp2drupal']) ? $_SESSION['wp2drupal']['wordpress']['db_pass'] : '',
+    'db_host' => isset($_SESSION['wp2drupal']) ? $_SESSION['wp2drupal']['wordpress']['db_host'] : 'localhost',
+    'db_name' => isset($_SESSION['wp2drupal']) ? $_SESSION['wp2drupal']['wordpress']['db_name'] : '',
+    'db_prefix' => isset($_SESSION['wp2drupal']) ? $_SESSION['wp2drupal']['wordpress']['db_prefix'] : 'wp_',
+  );
+
+  $wp_config_file = drupal_get_path('module', 'wp2drupal') .'/wp-config.php';
+
+  $form = array();
+
+  $form['before_you_begin'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Before You Begin..'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+    '#description' => t('Things to consider before starting:
+      <ul>
+        <li>It is recommended to disable all search engines and XMLSiteMap during the conversion process otherwise it will run <em>very</em> slowly.</li>
+        <li><strong>Be very careful</strong> with the Cleanup Settings, if you enter the name of a table that already has content <em>it will be erased!!</em></li>
+        <li>It is recommended to use PathAuto, Path_Redirect and GlobalRedirect to both capture old Wordpress URLs but also allow you to improve the URL structure.</li>
+      </ul>'),
+  );
+
+  $form['wordpress'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Wordpress'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+  );
+
+  if (!file_exists($wp_config_file)) {
+    $form['wordpress']['info'] = array(
+      '#value' => t('Easiest way to specify Wordpress settings is to copy wp-config.php file from your Wordpress installation into wp2drupal module directory. Default values will then be taken from that file and filled in for you. But if you wish, you can specify settings manually.'),
+    );
+  }
+  else {
+    $form['wordpress']['info'] = array(
+      '#value' => t('File wp-config.php was found and the default values in the following form will be populated automatically.'),
+    );
+
+    // first, we must get rid of require statements - that would cause error
+    $lines = file($wp_config_file);
+
+    $wp2drupal_directory_writable = TRUE;
+
+    if (!$handle = @fopen($wp_config_file .'.inc', 'w')) {
+      // because of prerequisities check, this branch should be never entered
+      $wp2drupal_directory_writable = FALSE;
+      $form['wordpress']['info'] = array(
+        '#value' => t('File wp-config.php was found in wp2drupal module directory but this directory is not writable - change the permission settings to automatically populate following form.'),
+      );
+    }
+    else {
+      foreach ($lines as $line) {
+        if (strpos($line, 'require') === FALSE) {
+          fwrite($handle, $line);
+        }
+      }
+
+      include_once($wp_config_file .'.inc');
+      $wp_defaults = array(
+        'db_user' => DB_USER,
+        'db_pass' => DB_PASSWORD,
+        'db_host' => DB_HOST,
+        'db_name' => DB_NAME,
+        'db_prefix' => $table_prefix,
+      );
+    }
+    fclose($handle);
+  }
+
+  $form['wordpress']['version'] = array(
+    '#type' => 'select',
+    '#title' => t('Select wordpress version'),
+    '#required' => TRUE,
+    '#options' => array(
+      '1.5' => '1.5',
+      '2.0' => '2.0',
+      '2.3' => '2.3',
+    ),
+    '#default_value' => '2.3',
+  );
+
+  $form['wordpress']['db_user'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Wordpress database user name'),
+    '#default_value' => $wp_defaults['db_user'],
+    '#required' => TRUE,
+  );
+
+  $form['wordpress']['db_pass'] = array(
+    '#type' => 'password',
+    '#title' => t('Wordpress database password'),
+    '#default_value' => $wp_defaults['db_pass'],
+    '#required' => TRUE,
+  );
+
+  $form['wordpress']['db_host'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Wordpress database host'),
+    '#default_value' => $wp_defaults['db_host'],
+    '#required' => TRUE,
+  );
+
+  $form['wordpress']['db_name'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Wordpress database name'),
+    '#default_value' => $wp_defaults['db_name'],
+    '#required' => TRUE,
+  );
+
+  $form['wordpress']['db_prefix'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Wordpress table names prefix'),
+    '#default_value' => $wp_defaults['db_prefix'],
+    '#required' => FALSE,
+  );
+
+  $form['wordpress']['db_encoding'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Database connection encoding'),
+    '#default_value' => isset($_SESSION['wp2drupal']) ? $_SESSION['wp2drupal']['wordpress']['db_encoding'] : 'utf8',
+    '#required' => FALSE,
+    '#description' => t('For possible values, see SHOW COLLATION query. Determine your concrete value from phpMyAdmin or similar tool. Many hosting companies use default latin1_swedish_ci collation, but you may also specify e.g. UTF-8 using <em>utf8</em> string. This value will be used in SET CHARACTER SET query so if you get "Illegal mix of collations..." error, you have problem right here. If this field is left blank, SET CHARACTER SET query will be skipped.'),
+  );
+
+  $form['wordpress']['site_encoding'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Wordpress strings encoding'),
+    '#default_value' => isset($_SESSION['wp2drupal']) ? $_SESSION['wp2drupal']['wordpress']['site_encoding'] : '',
+    '#required' => FALSE,
+    '#description' => t('<strong>You will usually not need to set this.</strong> This is the actual encoding of Wordpress strings stored in MySQL database. Use "iconv syntax" so for example Unicode is written as "UTF-8" and not "utf8". If you leave this blank, database encoding will be fetched from Wordpress settings. It\'s recommended to leave this field blank - use it only if you encounter encoding problems after your migration.'),
+  );
+
+  $form['wordpress']['encoding_info'] = array(
+    '#value' => t('<p>Character encodings is always the hard part if using MySQL. If you migrate non-English blog, you may find these tips handy:</p>
+
+    <ul>
+      <li>You must accept the fact that there <em>will be</em> encoding problems during migration process. I highly encourage you to setup some test environment and try it first. Another good way is to prepare your Drupal installation, backup the database and try the migration with different settings until it finally succeeds. If it fails, simply restore your backup.</li>
+      <li>If your database tables are encoded in for example latin1 but actually stores UTF-encoded strings (this works fine for Wordpress), you should consider exporting the whole Wordpress database, changing the encoding of exported .sql file on your machine and upload it back to some temporary database. If you make this new database and tables UTF-encoded, you might save many troubles yourself. (I won\'t describe the whole procedure in details but at least, I can recommend two excellent text editors which you might find handy: EmEditor and PSPad. They both handle Unicode, non-Unicode and conversion between them very well.</li>
+    </ul>'),
+  );
+
+
+  // drupal settings
+  $form['drupal'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Drupal settings'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+    '#tree' => TRUE,
+  );
+
+  $form['drupal']['user_mappings'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Wordpress to Drupal user mappings'),
+    '#default_value' => isset($_SESSION['wp2drupal']) ? $_SESSION['wp2drupal']['drupal']['user_mappings'] : '0=>1,1=>1',
+    '#required' => TRUE,
+    '#description' => t('<p>Specify how Wordpress users map to Drupal users. An example could be <strong>1=>1, 2=>1, 3=>2</strong> which means that posts from Wordpress users 1 and 2 will be assigned to Drupal user number 1 and Wordpress user 3 will be mapped to Drupal user 2. Syntax is <em>wpuid=>druid, wpuid=>druid, ...</em> (if there are more mappings, they are comma separated). Note that this is invalid: 1=>1, 1=>2 because it\'s not clear if WP user 1 should be mapped to Drupal user 1 or 2.</p> <p>During migration, the script will look into this "table" and if no user mapping is found, it will automatically create new Drupal user. Don\'t be afraid of tons of imported users - typical Wordpress installation has only one or a few registered users. Commenters and anonymous posters are not considered "users".</p><p>Note: The 0=>1 option is added to cover some faulty modules that incorrectly assign the user ID to 0.'),
+  );
+
+  $form['drupal']['categories'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Categories'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+    '#description' => t('Wordpress categories will be converted into taxonomy terms. If this vocabulary does not exist a new one will be created. If the vocabulary already exists, new terms will be added to it.<br />
+      Note: If you use the <a href="http://drupal.org/project/category">Category</a> module, be sure to allow compatibility with core taxonomy module (see admin/settings/category).'),
+  );
+  $form['drupal']['categories']['category_name'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Vocabulary name for imported categories'),
+    '#default_value' => isset($_SESSION['wp2drupal']) ? $_SESSION['wp2drupal']['drupal']['categories']['category_name'] : 'Categories',
+    '#required' => TRUE,
+  );
+  $form['drupal']['categories']['categories']['category_desc'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Vocabulary description'),
+    '#default_value' => isset($_SESSION['wp2drupal']) ? $_SESSION['wp2drupal']['drupal']['category_desc'] : 'Categories imported from Wordpress',
+    '#required' => FALSE,
+  );
+
+  $form['drupal']['tags'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Tags - Wordpress 2.3+'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+    '#description' => t('Wordpress 2.3 and higher support a tags structure similar to Drupal\'s free tagging. By default it will use the same vocabulary as the categories, but a different vocabulary may be entered below. If this vocabulary does not exist a new one will be created. If the vocabulary already exists, the Wordpress terms will be added to this vocabulary.<br />
+      Note: If you use the <a href="http://drupal.org/project/category">Category</a> module, be sure to allow compatibility with core taxonomy module (see admin/settings/category). '),
+  );
+  $form['drupal']['tags']['tags_name'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Vocabulary name for imported tags'),
+    '#default_value' => isset($_SESSION['wp2drupal']) ? $_SESSION['wp2drupal']['drupal']['tags']['tags_name'] : 'Tags',
+    '#required' => FALSE,
+  );
+  $form['drupal']['tags']['tags_desc'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Vocabulary description'),
+    '#default_value' => isset($_SESSION['wp2drupal']) ? $_SESSION['wp2drupal']['drupal']['tags']['tags_desc'] : 'Topics imported from Wordpress',
+    '#required' => FALSE,
+  );
+
+  // node type selection for converted data
+  $filter_node_options = array();
+  foreach (node_get_types() as $type => $name) {
+    if (node_access('create', $type)) {
+      $filter_node_options[$type] = $type;
+    }
+  }
+  $form['drupal']['blog_nodetype'] = array(
+    '#type' => 'select',
+    '#title' => t('Node type for blog entries'),
+    '#options' => $filter_node_options,
+    '#default_value' => isset($_SESSION['wp2drupal']) ? $_SESSION['wp2drupal']['drupal']['blog_nodetype'] : 'story',
+    '#required' => TRUE,
+  );
+  $form['drupal']['page_nodetype'] = array(
+    '#type' => 'select',
+    '#title' => t('Node type for Wordpress static pages'),
+    '#options' => $filter_node_options,
+    '#default_value' => isset($_SESSION['wp2drupal']) ? $_SESSION['wp2drupal']['drupal']['page_nodetype'] : 'page',
+    '#required' => TRUE,
+  );
+
+  // input filter
+  $filter_options = array();
+  foreach (filter_formats() as $format) {
+    $filter_options[$format->format] = $format->name;
+  }
+  $form['drupal']['filter'] = array(
+    '#type' => 'radios',
+    '#title' => t('Filter format for imported posts and comments'),
+    '#default_value' => isset($_SESSION['wp2drupal']) ? $_SESSION['wp2drupal']['drupal']['filter'] : 1,
+    '#required' => TRUE,
+    '#options' => $filter_options,
+    '#description' => t('Each post and comment will be imported "as is" from Wordpress but you should specify what\'s the actual format. For example, when you used textile as your Wordpress formatter, you should install this filter first and then specify it here.'),
+  );
+
+  $form['drupal']['import_trackbacks'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Import trackbacks?'),
+    '#default_value' => isset($_SESSION['wp2drupal']) ? $_SESSION['wp2drupal']['drupal']['import_trackbacks'] : 1,
+    '#required' => FALSE,
+    '#description' => t('Along with normal comments, Wordpress stores also so called trackbacks or pingbacks, i.e. short excerpt of linking article from another blog. You will probably lose nothing important if you won\'t import trackbacks but to migrate your blog "as is", you may want to leave this checkbox checked.'),
+  );
+
+  // URL rewriting settings
+  $form['url_rewrite'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('URL redirection settings'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+    '#tree' => TRUE,
+  );
+
+  // use path_redirect if installed
+  if (module_exists('path_redirect')) {
+    $form['url_rewrite']['info'] = array(
+      '#value' => "<p>". t('The migration script can use the <a href="http://drupal.org/project/path_redirect">Path Redirect</a> module to automatically map old post URLs to the new nodes.') ."</p>\n",
+    );
+    $form['url_rewrite']['enable'] = array(
+      '#value' => "<p>". t('The PathRedirect module is installed so it will be used to redirect old Wordpress URLs to new Drupal URLs.') . "</p>\n",
+    );
+    
+    // globalredirect too
+    if (module_exists('globalredirect')) {
+      $form['url_rewrite']['enable'] = array(
+        '#value' => "<p>". t('Because <a href="http://drupal.org/project/globalredirect">GlobalRedirect</a> is installed too, visitors will be automatically redirected from the old WP URLs to the new Drupal URLs transparently with no additional configuration required.') . "</p>\n",
+      );
+    }
+    else {
+      $form['url_rewrite']['enable'] = array(
+        '#value' => "<p>". t('Because GlobalRedirect is not installed, visitors will be shown the correct articles when they visit the old WP URLs but they will see the ugly "node/123"-style URLs.  It is recommended to install <a href="http://drupal.org/project/globalredirect">GlobalRedirect</a> to make this process cleaner.') . "</p>\n",
+      );
+    }
+  }
+  // otherwise give the option of handling it with the contained script
+  else {
+    $form['url_rewrite']['info'] = array(
+      '#value' => t('<p>The migration script can also create a redirection mechanism that will map old Wordpress paths to the new Drupal URLs (e.g. \'http://example.com/blog/?p=15\' will become \'http://example.com/index.php?q=blog/example-blog-entry\').</p><p>It will not create a huge .htaccess file or whatsoever but it rather stores redirection information into database table and provides a simple script that will redirect the browser to the new location. This approach is not Apache-dependent and enables you to build your own redirection script if the default one does not meet your needs. You will find concrete instructions on the "Final steps" tab after your migration is complete.</p><p>Final note is on comments. There is no serverside way to convert #comment-25 to, say, #comment-123 so the comment numbers must match exactly. The redirection will work only if the Drupal\'s installation is clean and contains no comments.'),
+    );
+    $form['url_rewrite']['enable'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Enable redirection'),
+      '#default_value' => isset($_SESSION['wp2drupal']) ? $_SESSION['wp2drupal']['url_rewrite']['enable'] : 1,
+    );
+    if (!$wp2drupal_directory_writable) {
+      // this branch should be never entered because of prerequisites check
+      $form['url_rewrite']['enable']['#attributes'] = array('disabled' => 'disabled', );
+      $form['url_rewrite']['enable']['#description'] = t('To enable URL redirection you must make wp2drupal module\'s directory writable.');
+      $form['url_rewrite']['enable']['#default_value'] = FALSE;
+    }
+
+    $form['url_rewrite']['new_blog_url'] = array(
+      '#type' => 'textfield',
+      '#title' => t('New blog URL'),
+      '#default_value' => isset($_SESSION['wp2drupal']) ? $_SESSION['wp2drupal']['url_rewrite']['new_blog_url'] : 'blog/1',
+      '#required' => TRUE,
+      '#description' => t('Home page of the new blog. Requests to Wordpress home page will be redirected here. Must be internal Drupal path.'),
+    );
+
+    $form['url_rewrite']['table_name'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Database table name'),
+      '#default_value' => isset($_SESSION['wp2drupal']) ? $_SESSION['wp2drupal']['url_rewrite']['table_name'] : 'wp2drupal',
+      '#required' => TRUE,
+      '#description' => t('Table name will be prefixed as the other Drupal tables (current prefix is set to \'%PREFIX%\')', array('%PREFIX%' => _get_prefix(), )),
+    );
+
+    $default_value = request_uri();
+
+    $form['url_rewrite']['wp_server_variable'] = array(
+      '#type' => 'textfield',
+      '#title' => t('PHP expression to construct Wordpress request URL'),
+      '#default_value' => isset($_SESSION['wp2drupal']) ? $_SESSION['wp2drupal']['url_rewrite']['wp_server_variable'] : $default_value,
+      '#required' => TRUE,
+      '#description' => t('Because server variables differ on different platforms (i.e., Apache vs. IIS) you can specify a server variable that contains the full request URL - it must contain query string too. The default value was preset according to your current platform but if the Wordpress blog is installed on a different machine, you may need to change this by hand (see phpinfo() for adequate variables). This thing is crucial for correct redirection functionality so be very careful. You can use any valid PHP expression (for example, when you need to concatenate more server variables, use something like <code>$_SERVER["SCRIPT_NAME"] . "?" . $_SERVER["QUERY_STRING"]</code>.'),
+    );
+
+    $form['url_rewrite']['not_found_page'] = array(
+      '#type' => 'textarea',
+      '#title' => t('404 (page not found) content'),
+      '#rows' => 10,
+      '#default_value' => isset($_SESSION['wp2drupal']) ? $_SESSION['wp2drupal']['url_rewrite']['not_found_page'] : file_get_contents(drupal_get_path('module', 'wp2drupal') .'/not-found.php.template'),
+      '#description' => t('If no redirection rule is found, this page will be served as a response. You can use full PHP so for example it\'s no problem to redirect user to the new address using header() function.'),
+    );
+  }
+
+
+  // string handling settings
+  $form['string_handling'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('String handling'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+    '#tree' => TRUE,
+  );
+  $form['string_handling']['user_function'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Custom user function'),
+    '#description' => t('PHP code that will be executed on every migrated string. The signature is <code>string _wp2d_custom_process_text(string $string)</code>.'),
+    '#default_value' => isset($_SESSION['wp2drupal']) ? $_SESSION['wp2drupal']['string_handling']['user_function'] : '<?php
+function _wp2d_custom_process_text($string) {
+	return $string;
+}
+?>',
+    '#rows' => 5,
+  );
+
+
+  // cleanup settings
+  $form['cleanup'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Cleanup settings'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+    '#tree' => TRUE,
+  );
+
+  $form['cleanup']['info'] = array(
+    '#value' => t('<p>If your Drupal installation is new or if you want to discard any content previously entered, migration script can empty all content-oriented tables. Be very careful of what you\'re doing because this can potentially lead to data loss (but you\'re going to backup your database, right?)</p>'),
+  );
+  $form['cleanup']['empty_database'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Empty database before migration'),
+  );
+
+  $form['cleanup']['empty_database_areyousure'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Empty database before migration - are you sure?'),
+    '#description' => t('Just a safety check...'),
+  );
+
+  $form['cleanup']['tables_to_truncate'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Tables to truncate'),
+    '#description' => t('Comma-separated list of tables that will be truncated (TRUNCATE TABLE xyz). You will typically not need to change it. If you specify to truncate nodes and comments, internal counters will be also reset to zero so your new posts will be numbered from 1 and not from e.g. 27.'),
+    '#default_value' => isset($_SESSION['wp2drupal']) ? $_SESSION['wp2drupal']['cleanup']['tables_to_truncate'] : 'access, cache, comments, node, node_comment_statistics, node_counter, node_revisions, url_alias, watchdog',
+    '#rows' => 2,
+  );
+  // if globalredirect is added, add its table to the truncate list
+  if (module_exists('globalredirect')) {
+    $form['cleanup']['tables_to_truncate']['#default_value'] .= ', path_redirect';
+  }
+
+  $form['warning'] = array(
+    '#value' => '<p>'. t('Migration script is provided as is and you should better backup everything now. You may find <a href="http://drupal.org/project/dba">Database Administration module</a> handy - it comes with one click backup function but is not currently 4.7-ready yet so I recommend using phpMyAdmin or similar utility.') .'</p>'.
+      '<p style="color:red;font-weight:bold;font-size:bigger;text-align: center;">'. t('Backup your Drupal database now!') .'</p>',
+  );
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Start migration!'),
+  );
+
+  return $form;
+}
+
+/**
+ * Checks prerequisites (e.g. some modules must be installed and enabled)
+ * and returns TRUE if the check passed, otherwise FALSE.
+ *
+ * @param string $message
+ *   This variable will be filled with details message
+ *
+ * @return boolean TRUE if prerequisites are fulfilled, otherwise FALSE
+ */
+function _check_prerequisites(&$message) {
+  $result = TRUE;
+  $message = "";
+
+  // Condition 1: blog.module, path.module and taxonomy.module must be enabled
+  // (user.module is also required but this one is always enabled)
+  $error_msg = '';
+  if (!module_exists('path')) {  // was module_exist (Drupal 4.7)
+    $error_msg .= ' path';
+  }
+
+  if (!module_exists('taxonomy')) { // was module_exist (Drupal 4.7)
+    $error_msg .= ' taxonomy';
+  }
+
+  //if ((!module_exists('blog')) && (!module_exists('content'))) { // was module_exist (Drupal 4.7) but our ContentType is not blog but CCK customs
+  //  $error_msg .= ' blog';
+  //}
+
+  if ($error_msg != '') {
+    $message .= "\t<li>". t('Following module(s) must be installed and enabled first: <strong>%error_msg</strong>. Please go to <a href="%url">modules administration page</a> and install or enable required modules.', array('%error_msg' => $error_msg, '%url' => url('admin/modules'), )) ."</li>\n";
+    $result = FALSE;
+  }
+
+  // Condition 2: iconv function must be available
+  if (!function_exists('iconv')) {
+    $message .= "\t<li>". t('Please enable <strong>iconv</strong> extension on your PHP installation. This extension is mandatory for correct wp2drupal functionality.') ."</li>\n";
+    $result = FALSE;
+  }
+
+  // Condition 3: module directory must be writable
+  $test_file = drupal_get_path('module', 'wp2drupal') .'/.writable.test.file';
+  if (!$handle = @fopen($test_file, 'w')) {
+    $message .= "\t<li>". t('Please make wp2drupal module\'s directory writable. Migration procedure needs to store some files into this directory so without correct permissions, it can\'t run successfully.') ."</li>\n";
+    $result = FALSE;
+  }
+  else {
+    unset($handle);
+    unlink($test_file);
+  }
+
+  if (!$result) {
+    $message = "<p>" . t('Some prerequisities must be fulfilled before you can continue:') ."</p>\n<ul>\n". $message ."</ul>\n";
+  }
+  return $result;
+}
+
+/**
+ * Handles submit button click, starts migration process
+ */
+function wp2drupal_form_settings_submit($form, &$form_state) {
+  $_SESSION['wp2drupal'] = $form_state['values'];
+  $form_state['redirect'] = 'admin/wp2drupal/results';
+  return;
+}
+
+/**
+ * Menu callback for second tab "2. Results"
+ *
+ * @return unknown
+ */
+function wp2drupal_form_results() {
+  if (empty($_SESSION['wp2drupal'])) {
+    return t('This page is supposed to display results of migration process and not for direct viewing. Please go to <a href="%URL%">settings page</a> to start migration.', array('%URL%' => url('admin/wp2drupal'), ));
+  }
+  drupal_set_html_head(theme('stylesheet_import', base_path() . drupal_get_path('module', 'wp2drupal') .'/wp2drupal.css'));
+
+  switch ($_SESSION['wp2drupal']['version']) {
+    case '1.5':
+    case '2.0':
+      require('migrate.php');
+      break;
+    case '2.3':
+      require('migrate_2.php');
+      break;
+  }
+
+  $process_output = '';
+  $migration_results = wp2drupal_process($process_output);
+
+  $output = "<p>Your migration is <strong>almost</strong> complete, it finished with ". $migration_results['error'] ." errors and ". $migration_results['warning'] ." warnings. After you review migration details, follow to <strong>final steps tab</strong> - without this step, the migration is not complete!</p>\n";
+
+  $output .= $process_output;
+
+  $output .= "<p>Don't forget to visit <a href='". url('admin/wp2drupal/finalsteps') ."'>final steps</a> tab. Without this step, your migration is not fully complete!</p>\n";
+  return $output;
+
+}
+
+/**
+ * Menu callback for the third tab "3. Final steps"
+ */
+function wp2drupal_form_final_steps() {
+  $output = "<p><strong>Congratulations</strong>, you have migrated Wordpress blog under the Drupal's wings. To make the migration results perfect, you should consider some final touches. Read on.</p>\n";
+  $output .= "<p>It's a good idea to redirect your RSS feeds to the new destination. The best way is to create appropriate mod_rewrite or isapi_rewrite rules.</p>\n";
+  if ($_SESSION['wp2drupal']['url_rewrite']['enable'] == 1) {
+    $output .= "<p>Because you chose to automatically redirect old URLs to the new ones, you need to do one final step to make this work. In this module's directory (usually located under [drupal_installation_path]/modules/wp2drupal), you will find two files:</p>\n";
+    $output .= "<ol>\n";
+    $output .= "\t<li>moved-permanently.php, and</li>\n";
+    $output .= "\t<li>not-found.php</li>\n";
+    $output .= "</ol>\n";
+    $output .= "<p>You need to ensure that any request to the old Wordpress blog will be redirected to moved-permanently.php. Easiest way is to rename this file as index.php and replace the old Wordpress's index file. Another way is to create a redirection rule using mod_rewrite or isapi_rewrite (this may be the only way if the Drupal installation replaced the Wordpress intallation on the same location).</p>\n";
+    $output .= "<p>Second, you will need to move not-found.php into your WP directory (the filename must always be not-found.php).</p>\n";
+    $output .= "<p>After these two simple steps, <strong>you're done</strong>! Congratulations :) You can (and should) now safely remove the whole wp2drupal module. Happy Drupalling!</p>\n";
+  }
+  else {
+    $output .= "<p>Because you didn't spcify to create URL redirection mechanism, there are no other steps needed. You're now ready to go! Happy Drupalling!</p>\n";
+  }
+  unset($_SESSION['wp2drupal']);
+  return $output;
+}
+
+/**
+ * Menu callback for the tab "0. Introduction"
+ */
+function wp2drupal_form_introduction() {
+  $output = "<p>Welcome to Wordpress-to-Drupal migration script. Here are some things you should know before you start:</p>\n";
+  $output .= "<ul>\n";
+  $output .= "\t<li>Supported versions are Drupal 4.7.x, 5.x and 6.x, and Wordpress 1.5 or 2.x.</li>\n";
+  $output .= "\t<li>The best way is to run this script on a clean Drupal installation but there should be no serious problems to incorporate Wordpress posts into any Drupal installation.</li>\n";
+  $output .= "\t<li><strong>I recommend you to use pathauto module</strong> to create \"cool URLs\". Structure of permalinks is not migrated so if you want to preserve it, you must manually set appropriate pathauto settings. If you do not want to use pathauto module, never mind, migration will work as well.</li>\n";
+  $output .= "\t<li><strong>wp2drupal module's directory (usually located under /modules/wp2drupal) must be writable</strong>. Migration script needs to emit some files so the process can never work right if the filesystem permissions aren't set correctly.</li>\n";
+  $output .= "\t<li>To make things easier, put Wordpress's wp-config.php file into the module's directory. Database connection settings will be populated automatically.</li>\n";
+  $output .= "\t<li>The migration script respects Wordpress settings so private or unpublished posts will never be publicly visible in Drupal anyway, etc. Comments marked as spam are not migrated.</li>\n";
+  $output .= "\t<li>Migration script can redirect visitors from old URLs to the new ones. The only thing you have to do manually is to redirect requests on RSS feeds.</li>\n";
+  $output .= "\t<li><strong>The migration script is time and resource intensive</strong>. Migrating around 500 posts and 500 comments takes around 30 seconds on 2 GHz notebook so your hosting should better have set_time_limit() enabled.</li>\n";
+  $output .= "</ul>\n";
+  $output .= "<p>Please note that this script can <strong>never</strong> damage your Wordpress installation but it can have (and will have) impact on your Drupal installation so be very careful on the settings page and never forget to backup your database.</p>\n";
+  $output .= "<p>If you are ready to start, go to <a href='". url("admin/wp2drupal/settings") ."'>settings page</a>.</p>\n";
+  return $output;
+}
+
+/**
+ * Returns database table name prefix
+ */
+function _get_prefix() {
+  $string = '{%TEMP%}';
+  $prefixed_string = db_prefix_tables($string);
+  return drupal_substr($prefixed_string, 0, strpos($prefixed_string, trim($string, "{}")));
+}

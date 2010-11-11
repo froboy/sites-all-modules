@@ -1,0 +1,7 @@
+; $Id$
+name = Signup webform
+description = Provides a signup form panes for each webform.
+dependencies[] = signup
+dependencies[] = webform
+package = Signup
+core = 6.x

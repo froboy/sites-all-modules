@@ -1,0 +1,617 @@
+<?php
+// $Id$
+/**
+ * @file signup_uc_attribute.module
+ * Provides integration between signup and ubercart attributes: provides a 
+ * signup form pane for the product attributes.
+ *
+ * This is tied in with uc_attribute because I don't see a way of having the connection
+ * to UC in one module and the handling of attributes in another. Both would
+ * want to call uc_cart_add_item(); or the uc_attribute glue module would
+ * have to alter the product already in the cart and it seems messy. But
+ * suggestions welcome!
+ *
+ * == Setup notes ==
+ * You probably want:
+ * - only logged-in users may sign up
+ * - don't send signup confirmation mails (conflicting message with Ubercart mails maybe? needs more investigation)
+ *
+ * == Code nodes ==
+ * The flows are as follows:
+ *  - User signs up for an event: the signup node product is added to their cart
+ *    and a record is added to {signup_uc_cart_products} to connect the signup and the cart item.
+ *    - signup_uc_attribute_form
+ *    - signup_uc_attribute_form_alter
+ *    - signup_uc_attribute_signup_data_alter
+ *    - signup_uc_attribute_signup_insert
+ *  - User removes the signup item from their cart: the signup is cancelled.
+ *    - signup_uc_attribute_cart_item, $op = remove
+ *  - User checks out: the record from {signup_uc_cart_products} is deleted now 
+ *    that the cart is empty; a new record to connect the signup and the order
+ *    is created in {signup_uc_order_products}.
+ *    - signup_uc_attribute_order
+ *    - signup_uc_attribute_cart_item, $op = remove
+ *  - User does not check out within a specified delay: the cart is emptied
+ *    by uc_cart module and the signup is cancelled,
+ *    - signup_uc_attribute_cart_item, $op = remove
+ *
+ * Data storage:
+ *  - We store the relationship between Signup ID (sid) and Ubercart cart item ID
+ *    in {signup_uc_cart_products}; once an order is complete the relationship
+ *    is then between sid and Ubercart order ID in {signup_uc_order_products}.
+ *
+ * @todo
+ *  - disallow UI cancellation of a UC signup
+ *
+ * see also
+ * - http://drupal.org/node/631230 - if we want to restrict cancellation via Ubercart.
+ */
+
+/**
+ * Implementation of hook_help().
+ */
+function signup_uc_attribute_help($path, $arg) {
+  switch ($path) {
+    case 'admin/help#signup_uc_attribute':
+      return t('TODO: Create admin help text.');
+    // OPTIONAL: Add additional cases for other paths that should display help text.
+  }
+}
+
+/**
+ * Implementation of hook_signup_pane_info().
+ *
+ * Defines panes available to signup forms.
+ * 
+ * @param $node
+ *  (optional) The node being considered for panes.
+ *  We use this to determine whether the node is a product and hence whether our
+ *  panes apply.
+ *
+ * @return
+ *  An associative array of data about signup form panes. 
+ *  The key is the pane ID. The value is itself an associative array of the
+ *  following form:
+ *    - label: A label for the admin UI.
+ *    - description: A longer description for the admin UI.
+ *    - callback: A callback function to generate the form.
+ */
+function signup_uc_attribute_signup_pane_info($node = NULL) {
+  // Only return a pane if the current node is an Ubercart product.
+  if (!isset($node->nid) || uc_product_is_product($node)) {
+    return array(
+      'uc_attribute' => array(
+        'label' => t('Product attributes'),
+        'description' => t("Shows Ubercart attributes for the signup-enabled product node, adds the product to the cart when the user signs up, and disables the regular Ubercart 'add to cart' form."),
+        'callback' => 'signup_uc_attribute_form',
+      ),
+    );
+  }
+}
+
+// -------------------------------- Signup form and associated alterations.
+
+/**
+ * Signup form pane callback.
+ *
+ * Generates the attributes form for this product node from Ubercart.
+ * @see signup_uc_attribute_form_alter() which correspondingly suppresses the
+ * default Ubercart 'add to cart' form.
+ *
+ * @param &$signup_form
+ *   The form array for the whole signup. You should not alter this, but it
+ *   contains useful data depending on circumstances.
+ * @param &$form_state
+ *   Likewise.
+ * @param $node
+ *   The fully loaded node object.
+ * @param $signup
+ *   If this is an existing signup, the fully loaded signup object. If this is a 
+ *   new signup, this is just NULL.
+ * @param $pane_id
+ *   The pane ID being invoked. This allows a module to implement multiple panes
+ *   with one callback.
+ * @param $signup_type
+ *   Determines what kind of signup to generate a form for. Possible values:
+ *    'auth' -- regular authenticated user signup form
+ *    'anon' -- anonymous user signup form (includes required email field).
+ *    'admin' -- admin form to signup another user (includes user selector).
+ * @return
+ *   A form API array for insertion into the signup form. 
+ */
+function signup_uc_attribute_form(&$signup_form, &$form_state, $node, $signup, $pane_id, $signup_type = 'auth') {
+  if (isset($signup)) {
+    // An existing signup may not have its Ubercart product attributes edited,
+    // as this would change the price of the product and:
+    // - if it is in the cart, UC has no
+    //   UI for changing these once in the cart anyway.
+    // - if it is already paid for, then it's too late!
+    // We show the user the options they chose and an explanation of why they
+    // can't be edited.
+    
+    // Some flags to indicate the user's level of access.
+    $may_edit   = user_access('edit own signups');
+
+    // Retrieve the product tied to this existing signup: it is either a cart
+    // item or an order product and we have no way of knowing which until we
+    // query the database.
+    if ($cart_item_id = signup_uc_attribute_get_cart_item_id($signup->sid)) {
+      $product = uc_cart_get_item($cart_item_id);
+
+      // Explain to the user why they can edit the signup but not our options.
+      if ($may_edit) {
+        $message = t('Options which affect the price of the signup may not be altered once it has been added to the cart. To change these options, remove %title from your <a href="!cart-url">cart</a> and sign up again.', array(
+          '!cart-url' => url('cart'),
+          '%title'    => $node->title,
+        ));
+      }
+    }
+    else {
+      // We can't get just the product here: we have to load the full order
+      // which kinda sucks.
+      $result = db_query("SELECT * FROM {signup_uc_order_products} WHERE sid = %d", $signup->sid);
+      if ($record = db_fetch_array($result)) {
+        $order = uc_order_load($record['order_id']);
+        // Memo to Ubercart folk: key by ID, it can make life much easier.
+        foreach ($order->products as $p) {
+          if ($p->order_product_id == $record['order_product_id']) {
+            // Reassign to prevent the last item in the loop getting picked.
+            $product = $p;
+            break; 
+          }
+        }
+      }
+
+      // Explain to the user why they can edit the signup but not our options.
+      if ($may_edit) {
+        $message = t('Options which affect the price of the signup may not be altered once it has been purchased.');
+      }
+    }
+
+    // Add the description array from uc_attribute's hook_product_description().
+    // This gives us formatted output for the user's chosen options.
+    $ubercart_form['attribute_descriptions'] = uc_attribute_product_description($product);
+    
+    // Add our explanation if there is one, and if there are actually options
+    // the user might consider editable -- ie, skip this if there are no 
+    // attributes.
+    if (isset($message) && count(element_children($ubercart_form['attribute_descriptions']['attributes']))) {
+      $ubercart_form['notice'] = array(
+        '#value' => '<p>' . $message . '</p>',
+      );
+    }
+  }
+  else {
+    // New signup: add the attributes form for this product node.
+    $ubercart_form = _uc_attribute_alter_form($node);
+    
+    // If a product has no attributes, we get NULL back.
+    if (!isset($ubercart_form)) {
+      $ubercart_form = array();
+    }
+  }
+
+  return $ubercart_form;
+}
+
+/**
+ * Implementation of hook_form_alter().
+ *
+ * Remove the 'Add to cart' button and attribute selection when they are shown
+ * in the signup pane.
+ *
+ * We don't use hook_uc_form_alter() because uc_attribute_uc_form_alter() fires 
+ * after us and this is easier than fiddling with module weights.
+ */
+function signup_uc_attribute_form_alter(&$form, $form_state, $form_id) {
+  if (substr($form_id, 0, 27) == 'uc_product_add_to_cart_form') {
+    $nid = $form['nid']['#value'];
+    $node = node_load($nid);
+    // Act if the node is signup-enabled and it has the UC attributes pane.
+    if ($node->signup && isset($node->signup_form_panes['uc_attribute'])) {
+      unset($form['submit']);
+      if (isset($form['attributes'])) {
+        unset($form['attributes']);
+      }
+    }
+  }
+}
+
+
+/**
+ * Implementation of hook_form_FORM_ID_alter(): signup form.
+ *
+ * Change the text of the Signup button.
+ */
+function signup_uc_attribute_form_signup_form_alter(&$form, $form_state) {
+  $node = node_load($form['nid']['#value']);
+  // Only act on signup-enabled nodes that have our pane enabled.
+  if (isset($node->signup_form_panes['uc_attribute'])) {
+    // Some wackier parts of FormAPI depend on the text value of this button.
+    // One to check if ever chasing a bug.
+    $form['collapse']['submit']['#value'] = t('Sign up and add to cart');
+  }
+}
+
+/**
+ * Implementation of hook_form_FORM_ID_alter(): signup edit form.
+ *
+ * Replace the cancellation link on the signup edit form with a note about
+ * removing the corresponding item from the cart.
+ */
+function signup_uc_attribute_form_signup_edit_form_alter(&$form, $form_state) {
+  $node = node_load($form['#signup']->nid);
+  // Only act on signup-enabled nodes that have our pane enabled.
+  if (isset($node->signup_form_panes['uc_attribute'])) {
+    if ($cart_item_id = signup_uc_attribute_get_cart_item_id($form['#signup']->sid)) {
+      if (isset($form['elements']['cancel-signup'])) {
+        // @todo: this should only be shown if the current user is the user whose signup this is.
+        // ie, check for and eliminate the case where an admin is editing the signup.
+        // It is necessary to have this markup in a block element, otherwise 
+        // internal span elements get taken out by some sort of FormAPI theming.
+        $form['elements']['cancel-signup']['#value'] = '<p>' . t('This is a paid %node_type. You may cancel this by removing the item from your <a href="!cart-url">cart</a>.', array(
+          '%node_type' => node_get_types('name', $node->type),
+          '!cart-url' => url('cart'),
+        )) . '</p>';
+      }
+
+    }
+    else {
+      if ($order_id = signup_uc_attribute_get_order_id($form['#signup']->sid)) {
+        if (isset($form['elements']['cancel-signup'])) {
+          // @todo: this should only be shown if the current user is the user whose signup this is.
+          // ie, check for and eliminate the case where an admin is editing the signup.
+          // It is necessary to have this markup in a block element, otherwise 
+          // internal span elements get taken out by some sort of FormAPI theming.
+          $form['elements']['cancel-signup']['#value'] = '<p>' . t('You have already paid for this %node_type. If you wish to cancel it, you should contact the site administrator.', array(
+            '%node_type' => node_get_types('name', $node->type),
+          )) . '</p>';
+        }
+      }
+    }
+  }
+}
+
+// -------------------------------- Signup workflow.
+
+/**
+ * Implementation of hook_signup_data_alter().
+ *
+ * Intercept signup data before it is saved, and add the signup-enabled product
+ * to the cart.
+ */
+function signup_uc_attribute_signup_data_alter(&$signup, $form_values) {
+  // Only act on a new signup (we can't alter any ubercart attributes once a 
+  // product is in the cart), and if our pane is enabled on the signup node.
+  $signup_node = node_load($signup->nid);
+  if (!isset($signup->sid) && isset($signup_node->signup_form_panes['uc_attribute'])) {
+    /*
+    WARNING
+    The call to uc_cart_add_item is based entirely on retroengineering what UC
+    core does based on shoving in a dsm(func_get_args()) to the top of it.
+    This may or may not work in cases I haven't envisioned, and I lay the blame
+    entirely at the door of people who do not properly document their APIs!
+    */
+    $node = node_load($signup->nid);
+    $quantity = 1; // TODO: allow more than one with the other patch in the signup queue!
+    
+    // Get the selected UC attributes from the form.
+    $uc_attribute_data = $signup->form_data['uc_attribute'];
+    unset($signup->form_data['uc_attribute']);
+    
+    $data = array(
+      'attributes'  => $uc_attribute_data,
+      'model'       => FALSE, // no idea why!
+      'shippable'   => $node->shippable,
+      'signup_in_progress' => TRUE, // This is checked by our hook_add_to_cart().
+    );
+    
+    // Add the item to the cart.
+    // Stuff to figure out:
+    // - do we always want this in the current user's cart? what if an admin signs up
+    //   another user: should the product appear in that user's cart?
+    uc_cart_add_item($node->nid, $quantity, $data,
+      NULL, // $cid
+      FALSE // $msg: whether to output messages
+      //TRUE  // $check_redirect??? @todo figure out if this is useful to us.
+    );
+    
+    // Total WTF: uc_cart_add_item() returns no data WHATSOEVER about what we 
+    // have just done: no cart ID, no item ID, nada.
+    // So we have to take a wild stab at it and HOPE LIKE HELL that a site admin
+    // is not adding to a user's cart at the same time (assuming that's possible).
+    // @todo: if you have a better idea of how to handle this, please suggest!
+    
+    $cart_id = uc_cart_get_id();
+    $cart_contents = uc_cart_get_contents($cart_id, 'rebuild');
+    //dsm($cart_contents);
+    
+    // Find the cart item(s) that is the current node.
+    foreach ($cart_contents as $index => $cart_item) {
+      if ($cart_item->nid == $node->nid) {
+        // Key the items by cart item ID for easy access to this value.
+        $signup_cart_items[$cart_item->cart_item_id] = $cart_item;
+      }
+    }
+
+    // Check how many products we've found and act accordingly.
+    if (count($signup_cart_items) == 0) {
+      // If there is no product for our node in the cart, then the adding to
+      // the cart has been prevented, possibly by hook_add_to_cart().
+      // Prevent the signup from going ahead.
+      $signup->block_signup = TRUE;
+      return;
+    }
+    elseif (count($signup_cart_items) > 1) {
+      // If there is more than one of this node in the cart, something wacky is going on.
+      // We have two of the same product!
+      // Ours is the most recent, we assume.
+      $cart_item_id = max(array_keys($signup_cart_items));
+    }
+    else {
+      // Only one product of this node in the cart. Everything okay.
+      $cart_item_id = reset(array_keys($signup_cart_items));
+    }
+
+    drupal_set_message(t('The product %title has been added to your <a href="!cart-url">cart</a>. Your signup is temporary until you have completed checkout.', array(
+      '%title' => $node->title,
+      '!cart-url' => url('cart'),
+    )));
+    
+    // We have no signup sid here. 
+    // In order to set a connection to our own data, we put in our own data's ID 
+    // here, so we can retrieve it in hook_signup_insert().
+    $signup->temporary_data['uc_attribute_latest_cart_item_id'] = $cart_item_id;
+  }
+}
+
+/**
+ * Implementation of hook_add_to_cart().
+ *
+ * Prevent a signup node being added to the cart by means other than our own, 
+ * eg an 'Add to cart' button in a View.
+ * (Note: the alternative would be to provide our own validation parallel
+ * to uc_catalog_buy_it_now_form_validate(). @todo, perhaps.)
+ *
+ * This hook is invoked by uc_cart_add_item() that we called in signup_uc_attribute_signup_data_alter() above.
+ */
+function signup_uc_attribute_add_to_cart($nid, $qty, $data) {
+  $node = node_load($nid);
+  // Only act on signup-enabled nodes that have our pane enabled.
+  if (isset($node->signup_form_panes['uc_attribute'])) {
+    // For a signup-enabled node with our pane to be added to the cart, it must
+    // come from the signup form submission. If our $data key is not set, reject it.
+    if (!$data['signup_in_progress']) {
+      $result[] = array(
+        'success' => FALSE,
+        'message' => t('To purchase this %node_type you must <a href="!node-url">enter your signup details</a>.', array(
+          '%node_type' => node_get_types('name', $node->type),
+          '!node-url' => url('node/' . $node->nid),
+        )),
+      );
+      return $result;
+    }
+  }
+}
+
+/**
+ * Implementation of hook_signup_insert().
+ *
+ * Carries on from signup_webform_signup_data_alter(). Saves the relationship
+ * between the signup and the cart item which we couldn't do earlier in 
+ * signup_webform_signup_data_alter() because at that point there is no signup id.
+ */
+function signup_uc_attribute_signup_insert($signup) {
+  // Retrieve the cart item ID from the signup data.
+  $cart_item_id = $signup->temporary_data['uc_attribute_latest_cart_item_id'];
+  
+  // Retrieve the cart item.
+  $item = uc_cart_get_item($cart_item_id);
+  
+  // Add the Signup ID to the UC cart item so hook_order() has SOME CLUE of
+  // who we are and what we're doing.
+  // This is messy as both IDs (signup and cart item) are now kicking about
+  // in the serialized data of the opposite item: but either way someone's
+  // losing a trailer.
+  // @see <http://drupal.org/node/744954>.
+  $item->data['signup_sid'] = $signup->sid;
+  
+  // Update the cart item.
+  uc_cart_update_item($item);
+  
+  // Store our own data: we store a relationship between:
+  // - signup ID
+  // - cart ID
+  // Other data such as uid and nid is accessible from both of these.
+  db_query("INSERT INTO {signup_uc_cart_products} (sid, cart_item_id) VALUES (%d, %d)", 
+    $signup->sid, $cart_item_id);  
+}
+
+// -------------------------------- Miscellaneous glue.
+
+/**
+ * Implementation of hook_form_FORM_ID_alter(): uc_cart_view_form.
+ *
+ * Prevent more than one signup product being added to the cart.
+ */
+function signup_uc_attribute_form_uc_cart_view_form_alter(&$form, &$form_state) {
+  // Disable Qty. fields on the cart view form for signup products.
+  foreach (element_children($form['items']) as $key) {
+    if (!isset($form['items'][$key]['nid'])) {
+      // The last numerically keyed item is the total row, and not a product.
+      continue;
+    }
+
+    $data = unserialize($form['items'][$key]['data']['#value']);
+    // Act on products that correspond to a signup: change the form item to a 
+    // fixed value and supply our own theme function.
+    if ($data['signup_sid']) {
+      $form['items'][$key]['qty']['#type'] = 'value';
+      $form['items'][$key]['qty']['#theme'] = 'signup_uc_attribute_locked_qty_field';
+    }
+  }
+}
+
+/**
+ * Implementation of hook_order().
+ *
+ * - act on submission of an order.
+ * - clean up data when an order is deleted.
+ */
+function signup_uc_attribute_order($op, &$arg1, $arg2) {
+  if ($op == 'submit') {
+    // The order is being submitted. 
+    // The cart has not yet been emptied (PHEW! Otherwise I see no way to find out
+    // information about our items).
+    
+    //dsm($op);
+    //dsm($arg1);
+    
+    $order_products = $arg1->products;
+    foreach ($order_products as $product) {
+      if (isset($product->data['signup_sid'])) {
+        // We have a signup product.
+        $signup_sid = $product->data['signup_sid'];
+        
+        // Store our own data: we store a relationship between:
+        // - signup ID
+        // - order ID
+        // - order product ID
+        db_query("INSERT INTO {signup_uc_order_products} (sid, order_id, order_product_id) VALUES (%d, %d, %d)", 
+          $signup_sid, $arg1->order_id, $product->order_product_id);
+
+        // We need to clear our entry in {signup_uc_cart_products} as although
+        // hook_cart_item() op 'remove' will get called, we do some heavy work 
+        // to bypass it.
+        // Delete our cart record.
+        db_query("DELETE FROM {signup_uc_cart_products} WHERE sid = %d", $signup_sid);
+      }
+    }
+  }
+  
+  if ($op == 'delete') {
+    // Delete our order record.
+    db_query("DELETE FROM {signup_uc_order_products} WHERE order_id = %d", $arg1->order_id);
+  }
+}
+
+
+/**
+ * Implementation of hook_cart_item().
+ *
+ * Act when a signup item is removed from the cart:
+ * - cancel the signup
+ * - remove our record
+ */
+function signup_uc_attribute_cart_item($op, &$item) {
+  switch ($op) {
+    case 'remove':
+      // Act when a signup item is removed from the cart:
+      // - cancel the signup
+      // - remove our record
+      
+      // WTF? We seem to come here with our data still serialized.
+      // Might be a bug in this module BUT NO TIME!!!!!!!!!!!!!!!!!!
+      if (!is_array($item->data)) {
+        $item->data = unserialize($item->data); 
+      }
+      
+      // This is a WTF. We have to query {signup_uc_order_products} just to 
+      // determine whether the product is being removed from the cart by the 
+      // user (in which case we cancel the signup) or the cart is going through
+      // checkout (in which case we do not!).
+      // This is because the 'remove' op is called both when the user manually 
+      // chooses not to buy a product AND when the cart is emptied for the 
+      // order creation.
+      // Bit of a WTF, no?
+      // @see <http://drupal.org/node/744956> for a patch.
+      if ($order_id = signup_uc_attribute_get_order_id($item->data['signup_sid'])) {
+        return;
+      }
+
+      // If we are still here, we cancel the signup.
+      // Load the product node (it is likely to be cached, eg if we are on the cart page).
+      $node = node_load($item->nid);
+      if ($node->signup) {
+        // Retrieve the signup.
+        $query = db_query("SELECT sl.* FROM {signup_log} sl LEFT JOIN {signup_uc_cart_products} sucp ON sl.sid = sucp.sid WHERE sucp.cart_item_id = %d", $item->cart_item_id);
+        while ($signup = db_fetch_object($query)) {
+          signup_cancel_signup($signup);
+        }
+      }
+      // Delete our cart record.
+      db_query("DELETE FROM {signup_uc_cart_products} WHERE cart_item_id = %d", $item->cart_item_id);
+      
+      break;
+  } 
+}
+
+/**
+ * Implementation of hook_signup_cancel().
+ *
+ * When a signup is canceled, delete our data.
+ THIS HOOK IS NOT NEEDED: we operate from the UC side.
+ *
+ * @todo: find a way to prevent UI cancellation of signups: 
+ *  - if the product is in the cart, remove it from the cart
+ *  - if the order is complete, errr.... no idea!
+ */
+function Xsignup_uc_attribute_signup_cancel($signup, $node) {
+}
+
+// -------------------------------- Utility.
+
+/**
+ * Helper function check if a signup is in the user's cart.
+ *
+ * @param $sid
+ *  The Signup sid.
+ *
+ * @return
+ *  The UC cart_item_id, if it exists.
+ */
+function signup_uc_attribute_get_cart_item_id($sid) {
+  $result = db_query("SELECT cart_item_id FROM {signup_uc_cart_products} WHERE sid = %d", $sid);
+  if ($cart_item_id = db_result($result)) {
+    return $cart_item_id;
+  }
+}
+
+/**
+ * Helper function check if a signup is fully paid for.
+ *
+ * @param $sid
+ *  The Signup sid.
+ *
+ * @return
+ *  The UC order_id, if it exists.
+ */
+function signup_uc_attribute_get_order_id($sid) {
+  $result = db_query("SELECT order_id FROM {signup_uc_order_products} WHERE sid = %d", $sid);
+  if ($order_id = db_result($result)) {
+    return $order_id;
+  }
+}
+
+// -------------------------------- Theming.
+
+/**
+ * Implementation of hook_theme().
+ */
+function signup_uc_attribute_theme($existing, $type, $theme, $path) {
+  return array(
+    'signup_uc_attribute_locked_qty_field' => array(
+      'arguments' => array('arg1' => NULL, 'arg2' => 0, 'arg3' => FALSE),
+    ),
+  );
+}
+
+/**
+ * Themes cart Qty. boxes so they can't be changed.
+ *
+ * Ripped from uc_restrict_qty.module as we want neither the dependency nor the UI.
+ */
+function theme_signup_uc_attribute_locked_qty_field($element) {
+  return check_plain($element['#value']);
+}
+

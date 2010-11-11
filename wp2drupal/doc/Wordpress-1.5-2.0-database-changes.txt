@@ -1,0 +1,6 @@
+Changes between Wordpress 1.5 and 2.0 database schemes:
+
+new column wp_categories.category_count // how many times is this category used in published posts
+new column wp_posts.post_type       // have something common with attachements but I don't know exatly what
+new column wp_posts.post_mime_type // dtto
+new column wp_posts.comment_count // how many comments has this post

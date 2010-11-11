@@ -1,0 +1,14 @@
+; $Id: ldapauth.info,v 1.2.4.15 2009/03/24 10:07:59 miglius Exp $
+name = Authentication
+description = Implements LDAP authentication.
+package = LDAP integration
+core = 6.x
+php = 5.0
+
+
+; Information added by drupal.org packaging script on 2010-07-11
+version = "6.x-1.x-dev"
+core = "6.x"
+project = "ldap_integration"
+datestamp = "1278834725"
+

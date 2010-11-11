@@ -1,0 +1,203 @@
+--- gmap.module.orig	2010-01-24 04:17:30.000000000 +0000
++++ gmap.module	2010-02-06 21:34:12.000000000 +0000
+@@ -119,6 +119,7 @@
+
+         drupal_add_js($path . 'icon.js');
+         drupal_add_js($path . 'marker.js');
++        drupal_add_js($path .'highlight.js');
+
+         $mm = variable_get('gmap_mm_type', 'gmap');
+         // If you really really want to override the marker manager, implement
+@@ -220,6 +221,18 @@
+           'help' => t('Used for advanced javascript work, this will enable the <em>clickshape</em> event.'),
+           'internal' => TRUE,
+         ),
++        'googlebar' => array(
++          'title' => t('Enable Google Bar'),
++          'default' => FALSE,
++          'help' => t('Enable the "Google Bar" at bottom.'),
++          'previewable' => TRUE,
++        ),
++        'highlight' => array(
++          'title' => t('Highlight marker on rollover'),
++          'default' => FALSE,
++          'help' => t('Highlight marker by creating circle on mouse rollover event.'),
++          'previewable' => TRUE,
++        ),
+       );
+       break;
+
+@@ -279,6 +292,7 @@
+     drupal_add_js($gmap_path . '/thirdparty/' . $mms[$mm]['filename']);
+   }
+   drupal_add_js($gmap_path . '/js/marker.js');
++  drupal_add_js($gmap_path . '/js/highlight.js');
+   drupal_add_js($gmap_path . '/js/' . $mm . '_marker.js');
+   drupal_add_js(array('gmap_markermanager' => $mms[$mm]), 'setting');
+ // @@@
+--- gmap_plugin_style_gmap.inc.orig	2009-12-15 18:39:26.000000000 +0000
++++ gmap_plugin_style_gmap.inc	2010-02-06 21:24:12.000000000 +0000
+@@ -29,10 +29,15 @@
+     $options['markers'] = array('default' => 'static');
+     $options['markertype'] = array('default' => 'drupal');
+ 
++    $options['center_on_nodearg'] = array('default' => '0');
++    $options['highlight_nodearg'] = array('default' => '0');
++
+     $options['latfield'] = array('default' => '');
+     $options['lonfield'] = array('default' => '');
+     $options['markerfield'] = array('default' => '');
+ 
++    $options['tooltipfield'] = array('default' => '');
++
+     return $options;
+   }
+ 
+@@ -76,14 +81,17 @@
+ 
+     $lat_field = 'gmap_lat';
+     $lon_field = 'gmap_lon';
++    $tooltip_field = 'gmap_tooltip';
+ 
+     // Determine fieldname for latitude and longitude fields.
+     if ($this->options['datasource'] == 'fields') {
+       $lat_fied_obj = $this->view->display_handler->get_handler('field', $this->options['latfield']);
+       $lon_field_obj = $this->view->display_handler->get_handler('field', $this->options['lonfield']);
++      $tooltip_field_obj = $this->view->display_handler->get_handler('field', $this->options['tooltipfield']);
+ 
+       $lat_field = $lat_fied_obj->field_alias;
+       $lon_field = $lon_field_obj->field_alias;
++      $tooltip_field = $tooltip_field_obj->field_alias;
+     }
+ 
+     // Determine fieldname for marker field.
+@@ -111,10 +119,36 @@
+     foreach ($sets as $title => $records) {
+       $markers = array();
+       $offsets = array();
++      $lat_center = null;
++      $lon_center = null;
++      $nid_center = null;
++      $nid_highlight = null;
++
++      // we search nid argument used to center map
++      if ($this->options['center_on_nodearg'] && $nodehandler = $this->view->display_handler->get_handler('argument', 'null')) {
++        $nid_center = $nodehandler->get_value();
++      }
++      if ($this->options['highlight_nodearg'] && $nodehandler = $this->view->display_handler->get_handler('argument', 'null')) {
++        $nid_highlight = $nodehandler->get_value();
++      }      
++
+       foreach ($records as $row_index => $row) {
+         $this->view->row_index = $row_index;
+         $lat = (float)$row->{$lat_field};
+         $lon = (float)$row->{$lon_field};
++
++        // if this row will be used as center map then we keep its lon/lat 
++        if (!empty($nid_center) && $nid_center == $row->nid) {
++          $lon_center = $lon;
++          $lat_center = $lat;
++        }
++        
++        
++        $tooltip = "";
++        if (!empty($tooltip_field)) {
++            $tooltip = $row->{$tooltip_field};
++        }
++        
+         if (!empty($lat) && !empty($lon)) {
+           if ($this->options['markers'] == 'nodetype') {
+             if (isset($markertypes[$row->gmap_node_type])) {
+@@ -148,12 +182,20 @@
+             'markername' => $markername,
+             'offset' => $offsets[$markername],
+             'text' => $this->row_plugin->render($row),
++            'opts' => array('title' => $tooltip),
+           );
+           $offsets[$markername]++;
+         }
+       }
+       if (!empty($markers)) { // Don't draw empty maps.
+         $map = gmap_parse_macro($this->options['macro']);
++
++        // if center lon/lat are not empty they are used to center map 
++        if (!empty($lon_center) && !empty($lat_center)) {
++          $map['longitude'] = $lon_center;
++          $map['latitude'] = $lat_center;
++        }
++        
+         $map['markers'] = $markers;
+         $output .= theme($this->theme_functions(), $this->view, $this->options, $map, $title);
+       }
+@@ -167,6 +209,19 @@
+    */
+   function options_form(&$form, &$form_state) {
+     parent::options_form($form, $form_state);
++    $form['center_on_nodearg'] = array(
++      '#type' => 'checkbox',
++      '#title' => t('Center on node argument'),
++      '#default_value' => $this->options['center_on_nodearg'],
++      '#description' => t('Note: The view must contain a node by node id as an argument Global:Null'),
++    );
++    $form['highlight_nodearg'] = array(
++      '#type' => 'checkbox',
++      '#title' => t('Highlight marker for node argument'),
++      '#default_value' => $this->options['highlight_nodearg'],
++      '#description' => t('Note: The view must contain a node by node id as an argument Global:Null'),
++    );
++
+     $form['macro'] = array(
+       '#type' => 'textfield',
+       '#title' => t('Macro'),
+@@ -211,6 +266,15 @@
+       '#process' => array('views_process_dependency'),
+       '#dependency' => array('edit-style-options-datasource' => array('fields')),
+     );
++    $form['tooltipfield'] = array(
++      '#title' => t('Tooltip field'),
++      '#description' => t('Format must be text'),
++      '#type' => 'select',
++      '#options' => $options,
++      '#default_value' => $this->options['tooltipfield'],
++      '#process' => array('views_process_dependency'),
++      '#dependency' => array('edit-style-options-datasource' => array('fields')),
++    );
+ 
+     $form['markers'] = array(
+       '#type' => 'select',
+--- js/gmap.js.orig	2009-12-01 19:47:53.000000000 +0000
++++ js/gmap.js	2010-02-06 21:44:39.000000000 +0000
+@@ -300,6 +300,9 @@
+     if (obj.vars.behavior.overview) {
+       map.addControl(new GOverviewMapControl());
+     }
++    if (obj.vars.behavior.googlebar) {
++        map.enableGoogleBar();
++    }
+     if (obj.vars.behavior.scale) {
+       map.addControl(new GScaleControl());
+     }
+--- js/marker.js.orig	2009-02-11 19:12:12.000000000 +0000
++++ js/marker.js	2010-02-06 21:24:12.000000000 +0000
+@@ -22,6 +22,11 @@
+     GEvent.addListener(m, 'click', function () {
+       obj.change('clickmarker', -1, marker);
+     });
++    if (obj.vars.behavior.highlight) {
++      GEvent.addListener(m, 'mouseover', function () {
++        obj.change('mouseovermarker', -1, marker);
++      });
++    }
+     if (obj.vars.behavior.extramarkerevents) {
+       GEvent.addListener(m, 'mouseover', function () {
+         obj.change('mouseovermarker', -1, marker);
+@@ -102,5 +107,9 @@
+     }
+   });
+
++  obj.bind('mouseovermarker', function (marker) {
++	  highlightCurrentMarker(obj.map, marker);
++  });
++
+   // @@@ TODO: Some sort of bounds handling for deletemarker? We'd have to walk the whole thing to figure out the new bounds...
+ });
